@@ -5,6 +5,8 @@ description: "Builds importable JSON dashboards for the Homey app Dashboard Stud
 
 # Dashboard Studio – generating JSON dashboards
 
+**Skill version 5.2.1** – matches the MCP AI Bridge version it was tested with (`community.mcp-ai-bridge` 5.2.1, together with Dashboard Studio 2.1.0). If the installed bridge version differs, mention it to the user and check the bridge-dependent steps (tool names, `homeyscript_run` with `dry_run`, `apps_get_settings`).
+
 Applies ONLY to the Homey app **Dashboard Studio** by Satoer (app ID `com.satoer.dashboardstudio`). Do not use it for the MCP AI Bridge's own dashboard (`dashboard_generate`) or for native Homey dashboards (`homey_dashboards_*`).
 
 Knowledge verified against Dashboard Studio **v2.1.0** (test channel, released 2026-10-19) on a Homey Pro (2026), checked 2026-10-21. If the installed version is newer, read the app's own release notes first (`release-changelog.json`, see "Source research without the browser") and re-check anything they touch.
