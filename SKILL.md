@@ -1,6 +1,6 @@
 ---
 name: "dashboard-studio-json"
-description: "Builds importable JSON dashboards for the Homey app Dashboard Studio (com.satoer.dashboardstudio) via the MCP AI Bridge. Only for this app – not for bridge or native Homey dashboards."
+description: "Builds, changes and repairs importable JSON dashboards for the Homey app Dashboard Studio (com.satoer.dashboardstudio) via the MCP AI Bridge. Use when the user wants a Dashboard Studio dashboard, widget, data feed or layout fix. Only for this app – not for the bridge's own dashboard or native Homey dashboards."
 ---
 
 # Dashboard Studio – generating JSON dashboards
@@ -10,9 +10,18 @@ description: "Builds importable JSON dashboards for the Homey app Dashboard Stud
 
 Applies ONLY to the Homey app **Dashboard Studio** by Satoer (app ID `com.satoer.dashboardstudio`). Do not use it for the MCP AI Bridge's own dashboard (`dashboard_generate`) or for native Homey dashboards (`homey_dashboards_*`).
 
-Knowledge verified against Dashboard Studio **v2.1.0** (test channel, released 2026-10-19) on a Homey Pro (2026), checked 2026-10-21. If the installed version is newer, read the app's own release notes first (`release-changelog.json`, see "Source research without the browser") and re-check anything they touch.
+Knowledge verified against Dashboard Studio **v2.1.0** (test channel, released 2026-10-19) on a Homey Pro (2026), checked 2026-10-21. If the installed version is newer, read the app's own release notes first (`release-changelog.json`, see "Source research without the browser" in `references/source-research.md`) and re-check anything they touch.
 
 Tool names below are given without their MCP prefix (e.g. `apps_get` = `<prefix>homey-bridge__apps_get`, `javascript_tool` = `<prefix>Claude_Browser__javascript_tool`).
+
+## Reference files (read only what the task needs)
+
+| file | read when |
+|---|---|
+| `references/browser-calls.md` | before the first browser call (opening the editor, discovery, probe, commit, demo fallback) |
+| `references/widgets.md` | before generating or editing the dashboard JSON (schema, widget fields, graphs, text formulas, bindings, colors) |
+| `references/data-feeds.md` | a value is not a device capability, or flow cards / calendars are involved |
+| `references/source-research.md` | after an app update, for unknown widget fields, the Auto-Widget Gallery, or variables/flows/moods |
 
 ## Browser budget – the most important rule
 
@@ -21,34 +30,11 @@ On the user's LAN address the built-in browser asks the user for approval **for 
 1. **Do everything that does not need the browser via the bridge first**: devices, capabilities, insights, flows, HomeyScript tests, data-feed tests (`homeyscript_run`), app settings. None of this asks the user.
 2. **Do all research and the layout preparation in the cloud workspace** (Python build script, topic check against the saved topic list, gzip+base64 encoding) before the next browser call.
 3. **One browser call = one complete job.** Never split "load", "wait", "check" and "read back" into separate calls. Never use `read_page`, `get_page_text`, `find` or `form_input` in the editor – do the same in the JavaScript call. Use `browser_batch` only when a screenshot must follow a JS step directly (each item still asks).
-4. **Check rendering in JavaScript, not by eye** (overflowing text, `-` formula errors, missing live values, resolved widget config – see "Probe call"). A screenshot is only needed once at the end for the user's visual review, preferably `computer` → `zoom` on the canvas region at `scale` ≤ 0.6.
-5. **Do source-code research without the browser** via HomeyScript (see "Source research without the browser"). Only if that is impossible, fold it into the discovery or probe call.
-6. **Save in the same call that does the final check** once the user has confirmed name and saving (see "Commit call").
+4. **Check rendering in JavaScript, not by eye** (overflowing text, `-` formula errors, missing live values, resolved widget config – see "Probe call" in `references/browser-calls.md`). A screenshot is only needed once at the end for the user's visual review, preferably `computer` → `zoom` on the canvas region at `scale` ≤ 0.6.
+5. **Do source-code research without the browser** via HomeyScript (see "Source research without the browser" in `references/source-research.md`). Only if that is impossible, fold it into the discovery or probe call.
+6. **Save in the same call that does the final check** once the user has confirmed name and saving (see "Commit call" in `references/browser-calls.md`).
 
 Target for a new dashboard: **4 browser calls** – 1 open editor, 1 discovery call (switch to Homey platform + read topics + optional source research), 1 probe call per layout iteration, 1 screenshot, 1 commit call. Tell the user up front roughly how many approvals to expect.
-
-## Source research without the browser (verified v2.1.0)
-
-The editor web server is reachable from HomeyScript on the Homey itself at `http://127.0.0.1:5050/`. This costs the user **no approval click**. Use `homeyscript_run` with inline `code` and `dry_run: true` (GET fetches are allowed in a dry run). Useful files:
-
-| file | content |
-|---|---|
-| `version.js` | `window.DASHBOARD_VERSION` (use it for the JSON `version` field) and `LATEST_MIGRATION_VERSION` |
-| `release-changelog.json` | the app's full release notes as JSON (`[{version, date, changes[]}]`, newest first) – read this first after an update |
-| `help/help-content.json` (~415 KB) | the full official help of the installed version (satoer.com blocks automated fetchers) |
-| `widgets/<type>.js` | config keys (`c.<field>`), defaults (`static get globalSettings`), `dependsOn` rules |
-| `dashboard.js`, `drivers/homey.js`, `save-format-v2.js` | load/save/publish logic, on-disk format |
-| `scripts/auto-widget-gallery.js` | the app's own topic → widget classifier (see "Auto-Widget Gallery") |
-| `dashboards/<Name>.json` | saved dashboards |
-
-Return only grep hits with line numbers (filter by regex, cap at ~60 lines per file) – never whole files.
-
-```js
-const B = 'http://127.0.0.1:5050/';
-const t = await (await fetch(B + 'widgets/switch.js')).text();
-return t.split('\n').map((l, i) => (i + 1) + ': ' + l.trim())
-        .filter(l => /actionType|pageTo|outputTopic/.test(l)).slice(0, 60);
-```
 
 ## Step 0 – Preconditions (always run first, bridge only)
 
@@ -62,103 +48,12 @@ return t.split('\n').map((l, i) => (i + 1) + ': ' + l.trim())
 
 1. **Collect devices and values** via the bridge (`devices_list`, `devices_get`, `devices_get_capability`, `insights_list`, `insights_get_entries`): available capabilities, units, sign conventions (e.g. grid meters often report export as negative `measure_power`), sub-capabilities such as `measure_power.pv1input`, value ranges.
 2. **Enable capabilities in Dashboard Studio.** Without this the app sends no data for them. They are stored in the app setting `enabled_capabilities` = `{ "<deviceId>": ["cap", "cap.sub"] }`. Read the current value with `apps_get_settings`, MERGE (never drop existing entries), show the user what will be added, and write with `apps_set_setting` only after the user confirms. The app picks up changes immediately.
-   For values that are not device capabilities (system data, insight histories, computed values) use a data feed instead – see "Feeding non-device data".
-3. **Read the exact topic names from the editor – MANDATORY** in ONE discovery call (see "Discovery call"), or ask the user to paste the Data Stream Explorer list. Do NOT generate the JSON before this list is available. Never derive, guess or construct device topic names (not from device IDs, not from device names). Every device topic used must appear verbatim in that list. Save the list to a file in the workspace for the topic check.
-4. **Generate the JSON** (schema below) with a script, and run the topic check ("Topic names").
+   For values that are not device capabilities (system data, insight histories, computed values) use a data feed instead – see "Feeding non-device data" in `references/data-feeds.md`.
+3. **Read the exact topic names from the editor – MANDATORY** in ONE discovery call (see "Discovery call" in `references/browser-calls.md`), or ask the user to paste the Data Stream Explorer list. Do NOT generate the JSON before this list is available. Never derive, guess or construct device topic names (not from device IDs, not from device names). Every device topic used must appear verbatim in that list. Save the list to a file in the workspace for the topic check.
+4. **Generate the JSON** (schema in `references/widgets.md`) with a script, and run the topic check ("Topic names").
 5. **Test in the user's editor** with ONE probe call per iteration, fix the build script, repeat. Then one zoomed screenshot.
 6. **Hand over for approval.** Show the screenshot and ask whether and under which name to save. Never click *Save to Homey* without explicit confirmation in this session. Also deliver the JSON file.
 7. **Save** only after confirmation with ONE commit call, which also verifies.
-
-## Opening the editor
-
-- `request_access {url: "http://<ip>:5050", scope: "once"}`, then `preview_start` with the editor URL (or `navigate` in the tab the user opened; check `tabs_context` once).
-- **Half-loaded page:** if the approval only covered the document, sub-resources may be missing; the page then shows unstyled buttons and `typeof Dashboard === 'undefined'`. Detect this inside the next JS call (return early with that information) and reload once with `navigate`.
-- **Start behaviour (verified in `dashboard.js`):** on start the editor loads `dashboards/dashboard.json`; if that file does not exist it falls back to `demo.json` (platform "simulation"). The editor strips all URL parameters except `token` and `test_mode`, so there is no URL parameter to open a specific dashboard in the editor; `?dashboard=<Name>` only works in `viewer.html`. A dashboard saved under the name **`dashboard`** is therefore the editor's start page (and the viewer's default without parameter).
-
-## Discovery call (one browser call)
-
-Switches the editor to the Homey platform, waits, and returns the topic list plus the topic metadata (access flags, flows, moods, variables):
-
-```js
-if (typeof Dashboard === 'undefined') { 'NOT_LOADED' } else {
-const minimal = {version: window.DASHBOARD_VERSION || "2.1.0", master:{connection:{dataDriver:"homey",driverSettings:{}},
-  environment:{canvas:{width:1280,height:800},theme:"default_dark",layout:{mode:"scale",scale:{keepAspectRatio:true}}}},
-  globalBindings:{}, widgets:{}, groups:{}, selectionGroups:{}};
-if (!Dashboard._isHomeyPlatform()) { await Dashboard.loadDashboardData(minimal); }
-await new Promise(r => setTimeout(r, 6000));
-const tm = Dashboard.topicMeta || {};
-const special = Object.fromEntries(Object.entries(tm)
-  .filter(([t, m]) => m && (m.isFlow || m.isMood || m.isVariable))
-  .map(([t, m]) => [t, {flow: !!m.isFlow, mood: !!m.isMood, variable: !!m.isVariable,
-                        cap: m.capabilityId, title: m.title, set: !!m.setable, get: !!m.getable}]));
-JSON.stringify({version: window.DASHBOARD_VERSION, isHomey: Dashboard._isHomeyPlatform(),
-  topics: Object.keys(Dashboard.liveData).sort(), special});
-}
-```
-
-## Probe call (one browser call per layout iteration)
-
-Loads the draft (gzip + base64), waits, and checks everything that can be checked without looking:
-
-```js
-const bin = Uint8Array.from(atob(B64), c => c.charCodeAt(0));
-const data = JSON.parse(await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'))).text());
-await Dashboard.loadDashboardData(data);
-await new Promise(r => setTimeout(r, 5000));
-const ld = Dashboard.liveData || {};
-const used = new Set();
-for (const w of Object.values(data.widgets)) {
-  Object.values(w.bindings || {}).forEach(t => used.add(t));
-  for (const m of String(w.overrides.text || '').matchAll(/\{\{(homey\/[^{}]+?|[a-z0-9-]+\/[^{}\s]+?)\}\}/g)) used.add(m[1]);
-}
-const missingLive = [...used].filter(t => !t.startsWith('local/') && !(t in ld));
-// rendering problems: overflowing text widgets and '-' (failed formula)
-const problems = [];
-for (const [id, w] of Object.entries(Dashboard.widgets)) {
-  const el = w.el || w.element || w.container || document.querySelector(`[data-widget-id="${id}"]`);
-  if (!el) continue;
-  if (el.scrollHeight > el.clientHeight + 2 || el.scrollWidth > el.clientWidth + 2) problems.push(id + ': overflow');
-  if (/(^|\s)-(\s|$)/.test(el.innerText || '') && data.widgets[id]?.type === 'text') problems.push(id + ': "-" (formula?)');
-}
-const cfg = id => { const w = Dashboard.widgets[id]; const c = w && (w.config || w.c); return c ? {min: c.min, max: c.max, type: c.type} : null; };
-JSON.stringify({isHomey: Dashboard._isHomeyPlatform(), widgets: Object.keys(Dashboard.widgets).length,
-  missingLive, problems /*, resolved: cfg('<widgetId>') */});
-```
-
-If the element lookup returns nothing for a widget type, inspect `Object.keys(Dashboard.widgets['<id>'])` once inside the same call and adapt. Only when `missingLive` and `problems` are empty, take the single zoomed screenshot.
-
-## Commit call (one browser call, only after explicit confirmation)
-
-Saves the currently loaded dashboard under `NAME`, handles the overwrite and success dialogs, and verifies. Optionally load the final B64 first in the same call so nothing has to be repeated.
-
-```js
-const vis = el => el && el.offsetParent !== null, sleep = ms => new Promise(r => setTimeout(r, ms));
-const NAME = '<Name>';            // case-sensitive file name without .json
-const ALLOW_OVERWRITE = false;    // true only if the user explicitly asked to replace this name
-const existing = (await fetch('dashboards/' + NAME + '.json', {cache: 'no-store'})).ok;
-if (existing && !ALLOW_OVERWRITE) { 'EXISTS – ask the user first' } else {
-  [...document.querySelectorAll('button')].find(b => vis(b) && /Save to Homey/i.test(b.textContent)).click();
-  await sleep(1500);
-  const modal = document.querySelector('#file-modal');
-  const inp = document.querySelector('#save-filename');
-  inp.value = NAME; inp.dispatchEvent(new Event('input', {bubbles: true}));
-  await sleep(300);
-  [...modal.querySelectorAll('button')].find(b => vis(b) && b.textContent.trim() === 'Save').click();
-  await sleep(1500);
-  const clicked = [];
-  for (let i = 0; i < 3; i++) {     // overwrite confirmation (if any) and "Saved successfully!" → OK
-    const b = [...document.querySelectorAll('button')].find(b => vis(b) && /^(Overwrite|Replace|Yes|Confirm|OK)$/i.test(b.textContent.trim()));
-    if (!b) break; clicked.push(b.textContent.trim()); b.click(); await sleep(1500);
-  }
-  try { ServerFileManager.close(); } catch (e) {}
-  const r = await fetch('dashboards/' + NAME + '.json', {cache: 'no-store'});
-  JSON.stringify({clicked, status: r.status, widgets: r.ok ? Object.keys((await r.json()).widgets || {}).length : null});
-}
-```
-
-Verified details: the save dialog is `#file-modal` (class `show`), the input is `#save-filename`, the primary button text is exactly `Save` (class `ds-dialog-button primary`). After saving, a dialog "Success – Saved successfully!" with an `OK` button appears and must be closed. The file list in the dialog (`.ds-file-list-name`) is not proof of success; only `fetch('dashboards/<Name>.json')` = 200 is.
-
-**File names:** use a clear name without spaces, e.g. `Title_yyyymmdd_V#`, and save changes as a new version (`_V2`, `_V3`, …) instead of overwriting, unless the user asks otherwise. Exception: the start page must be called exactly `dashboard`.
 
 ## Topic names (critical)
 
@@ -169,191 +64,6 @@ Verified details: the save dialog is `#file-modal` (class `show`), the input is 
 - Before testing or handing over, check programmatically that every `{{topic}}` in texts (including nested ones inside formulas) and every value in `bindings` is contained in the saved topic list (device topics) or is a known event topic. Report any mismatch instead of delivering.
 
 A wrong topic shows an empty field without any error.
-
-## Feeding non-device data (system values, insight histories)
-
-- **"Send Insight" flow card limitation:** all time ranges of the same insight end up on the SAME topic (`homey/insight/<name>`), so a 24 h and a 7 day graph of one insight cannot coexist. The card "Get Insight Data (Advanced)" only returns tokens (`insight_raw`, `insight_highest`, `insight_lowest`, `insight_average`).
-- **Proven pattern: one HomeyScript as data feed.** It reads values and pushes each one as an event:
-  ```js
-  const DS = 'homey:app:com.satoer.dashboardstudio';
-  const send = (name, value) => Homey.flow.runFlowCardAction({uri: DS, id: DS + ':dashboard_send', args: {name, value: String(value)}});
-  const info = await Homey.system.getInfo();          // loadavg, cpus, totalmem/freemem, videoCoreTemperature, uptime, undervoltage flags
-  const mem  = await Homey.system.getMemoryInfo();    // total, free, swap, types{ 'homey': {name,size}, 'homey:app:<id>': {name,size} }
-  const stor = await Homey.system.getStorageInfo();   // total, free, types
-  const e = await Homey.insights.getLogEntries({uri: 'homey:manager:system', id: 'homey:manager:system:loadavg', resolution: 'last24Hours'});
-  await send('h_cpu_24h', JSON.stringify(e.values.map(p => ({t: p.t, v: Math.round(p.v * 10) / 10}))));
-  ```
-  Insight `id` must be the FULL id (`homey:manager:system:loadavg`), the short id fails with "Not Found: LogLocal". System insights: `loadavg` (CPU %), `memory` (MB, Homey process memory, not total RAM), `temperature` (°C), `clock` (GHz), `undervoltageratio` (%). Precompute min/avg/max in the script and send them as separate events for legends and scales.
-- **Test without persistence:** `homeyscript_run` with inline `code` (a real run only pushes events to the dashboard socket; `dry_run: true` lists the `runFlowCardAction` calls instead). Then read the arrival in the probe call.
-- **Persist only after confirmation:** `homeyscript_create` + a trigger flow. Current values every minute, histories every 5 minutes (check `new Date().getMinutes() % 5` in the script).
-- **Use Advanced Flows.** A basic flow created via `flows_create` runs, but the Homey web app showed it as an EMPTY canvas without card menu (observed on a Homey Pro 2026 where all other flows were Advanced Flows). Create the trigger with `advanced_flows_create` (cron `homey:manager:cron:every_nth` `{n: 1, type: "minute"}` → `homey:app:com.athom.homeyscript:run` with the autocomplete script object), and verify with `homeyscript_last_runs` after ~70 s.
-
-## File schema
-
-```json
-{
-  "version": "<installed version from version.js, e.g. 2.1.0>",
-  "master": {
-    "connection": {"dataDriver": "homey", "driverSettings": {}},
-    "environment": {
-      "editorMode": "advanced", "editorZoom": 100, "widgetLabelMode": "hover",
-      "canvas": {"width": 1280, "height": 870, "preset": "",
-        "background": {"startColor": "@background", "startOpacity": 100, "endColor": "@backgroundAccent", "endOpacity": 100, "type": "radial", "angle": 0, "overlay": false, "image": "", "size": "cover"}},
-      "grid": {"size": 10, "show": false, "snap": true},
-      "paging": {"currentPage": 1},
-      "theme": "default_dark",
-      "layout": {"mode": "scale", "scale": {"keepAspectRatio": true}}
-    }
-  },
-  "globalBindings": {},
-  "widgets": { "<id>": {"type": "…", "overrides": {…}, "bindings": {…}} },
-  "groups": {},
-  "selectionGroups": {}
-}
-```
-
-- Since v2.0.14 the editor saves a nested "V2" format (`save-format-v2.js`): label-based nested keys on disk (e.g. `container.background.startColor`), flat keys at runtime. Empty `groups`/`selectionGroups` are omitted on save. The schema above still imports correctly.
-- A minimal `master` is enough. Missing parts (`typography`, `container`, `theme.colors`, `widgetDefaults`) are filled from defaults.
-- `dataDriver` is one of `homey`, `mqtt`, `nodered` or `simulation`. Use `homey` for the user's own Homey; it also switches the editor's platform on load.
-- `layout.mode`: `fixed` uses exact pixels ("Fixed Resolution"), `scale` scales to the window using the same coordinates ("Scale to Fit Screen"), `responsive` uses columns ("Responsive Columns").
-- Themes include `default_dark`, `eink_dark`, `eink_light`, `midnight_blue`, `deep_space`, `executive_suite` and `paper_white` (35+ built in).
-- **Widget object:** `type`, `overrides` (position and all properties) and `bindings` (field → topic). Required in `overrides`: `x`, `y`, `width`, `height`, `page` (a number or a string like `"1, 2, 7-12"`). Optional: `metaName` (name shown in the editor), `zIndex`, `visible`, `locked`, and `container: {"show": false}` to hide the card frame.
-- Unknown field names: take them from an Auto-Widget Gallery skeleton or read them from the widget source via HomeyScript (see "Source research without the browser"), never by trial and error with extra browser calls.
-
-## Widget types and key fields
-
-| type | purpose | fields (overrides) | bindable (bindings) |
-|---|---|---|---|
-| `text` | Markdown with live values | `text`, `textAlign`, `padding`, `mdTableStyle` (`minimal`, `solid_header`), `contentAnimation`, `mdAutoFitText` (true = scale text to fill the widget) | `text`, `visible` |
-| `empty` | container or card with a caption | `label` | `visible` |
-| `icon` | Phosphor icon that glows when active | `label`, `size`, `active`, `activeIconMirrorsInactive`, `blink`, `icons:{off:{source:"phosphor",builtin:"ph-sun",weight:"fill",color:"@icon"}, on:{…,color:"@warning"}}` | `active`, `label` |
-| `arrow` | line or arrow with flow animation | `fromX`, `fromY`, `toX`, `toY` (absolute canvas coordinates), `customPoints:[{x,y}]` for bends, `pathBendRadius`, `thickness`, `headSize` (0 = no head), `lineRadius`, `headRound`, `mainColor`, `animationEnabled`, `animationSpeed`, `animationReverse`, `flowWidth`, `gradientWidth`, `enableGlow` | `animationEnabled`, `animationReverse`, `thickness`, `visible`, colors |
-| `gauge` | round or horizontal gauge | `label`, `unit`, `min`, `max`, `decimals`, `showIcon` (default true, shows a thermometer!), `gaugeCol0`, `gaugeCol100`, `barThickness`, `trackThickness`, `gapRound`, `gaugeSizeOffset` | `value` |
-| `battery` | battery bar (no numeric % shown) | `label`, `vertical` | `value` |
-| `graph` | line, bar or big-number chart, ONE series | see "Graph widget" | `data`, plus numeric fields such as `min`, `max` |
-| `switch` | toggle or push button, also navigation | `buttonLabel`, `mode` (`toggle`/`push`), `style` (`switch`/`button`), `actionType` (`topic`/`page`/`url`), `pageTo` (target page for `page`), `urlTo`, `urlNewTab`, `outputTopic`, `separateOnOffTopics` + `outputTopicOff`, `onPayload`, `offPayload`, `showIcon`, `iconSize`, `icons` | `state` |
-| `slider` | dimmer or setpoint | `min`, `max`, `vertical` | `value` |
-| `list` | log or feed | – | `data` |
-| `image` | URL or SVG image | `url`, `fit`, `liveRefresh`, `refreshInterval` | `svgRaw`, `url` |
-| `clock` | analog, flip or text clock | `displayMode` | – |
-| `menu` | navigation menu; items with `actionType` `topic`, `page` or `url` (`urlTo`) | – | see the editor |
-| `lightgrid`, `editbox` | light tiles, text input | – | see the editor |
-
-**Arrow bounding box:** `x`, `y`, `width` and `height` enclose all points with about 40 px padding. The arrowhead sits at the `to` point. When `animationReverse` is true, the flow runs backwards and the head jumps to the other end. Default colors: flow `@success` (green), reverse flow `@danger` (red). In view mode, arrows let clicks pass through.
-
-**Text size:** `#` headings render small on a 1280 px canvas. For one prominent value use `mdAutoFitText: true`. Do not set it on all tiles: each tile then scales differently and the layout looks uneven. A Markdown table that may grow (e.g. a top-N list) gets its own text widget with `mdAutoFitText: true`; headings and footers go into separate widgets so they are never pushed out.
-
-**Gauge:** set `showIcon: false` unless an icon is wanted; with the default layout the caption overlaps the arc – `gapRound: 6` and `gaugeSizeOffset: 22` (200×140 widget) fix that.
-
-**Navigation buttons (verified):** a `switch` with `mode: "push"`, `style: "button"`, `actionType: "url"`, `urlTo: "viewer.html?dashboard=<Name>"`, `urlNewTab: false`, `buttonLabel`, `showIcon: true`, `icons: {on:{source:"phosphor",builtin:"ph-cpu",weight:"fill",color:"#38bdf8"}, off:{…}}`. Ideal for a start page saved as `dashboard`.
-
-## Auto-Widget Gallery (new in v2.1.0)
-
-The app now classifies live topics itself and suggests a pre-configured widget per topic (type, preset, icon, unit, min/max). In the UI: Tools → **Auto-Widget Gallery**, the button above the topic list in the **Data Stream Explorer**, and the last step ("Populate Your Canvas") of the **Reset Canvas** wizard. The author calls the feature not yet finished.
-
-Use it as a **skeleton source** for widget fields instead of guessing names. The script is lazy-loaded; in the discovery call (source-verified, not yet run-tested):
-
-```js
-await WidgetScriptLoader.loadScript('scripts/auto-widget-gallery.js');
-const {entries} = AutoWidgetGallery.classifyAll();
-const skel = entries.map(e => ({name: e.name, type: e.type, rule: e.ruleId, tile: e.tile,
-  overrides: e.overrides, bindings: e.bindings}));
-```
-
-- `entries[].overrides` come from the first preset of the chosen widget type, with `x: 0, y: 0` and WITHOUT `width`/`height`; position and size are still yours. `bindings` reference the real topic.
-- `AutoWidgetGallery.traceTopic(topic)` explains which rule matched one topic; `getRulePipeline()` lists all rules.
-- Rule order (first match wins; a pre-pass first groups lights into one light grid, 2x2): write-only action/flow/mood/button → push switch · writable boolean (`onoff`, `alarm_*`, boolean variable) → switch · read-only boolean (contact, motion, alarm) → icon · Markdown/table/calendar → text · SVG markup → image · image URL → image · video URL → video · Phosphor icon slug → icon · color → container · numeric series / insight stream → graph · string list / log → list · battery → battery · fraction capability (`dim`, `volume_set`, `windowcoverings_set`, `light_hue`, `light_saturation`, `light_temperature`) → gauge (read) or slider (write) with `min: 0, max: 1, unit: "%"` · other number → gauge (read) or slider (write) · long text (> 40 chars) → text · short text → label (read) or edit box (write).
-- The gallery also knows the widget types `label` and `video`, which are not in the table above; read their fields from the skeleton.
-- Review the result: the classifier only sees one sample payload. Report misclassifications to the author with topic name, payload and expected widget type.
-- `AutoWidgetGallery.place(specs)` adds widgets to the live canvas (editor history action) – only on the user's explicit request, it changes the open dashboard.
-
-## Variables, Flows and Moods (since v2.0.13, Personal API Key)
-
-- **What it unlocks:** writing Homey Logic variables from `editbox`, `switch` and `slider` widgets (access RW instead of R), starting Standard and Advanced Flows from buttons/switches (capability `start`, access W), and activating zone Moods (capability `set`, access W).
-- **Not needed for:** reading variables (read-only works without a key), sensors, and normal device control.
-- **The user creates the key, never Claude:** Homey Web App → Settings → API Keys → New API Key. Scopes: Variables `homey.logic`; Flows `homey.flow.start` + `homey.flow.readonly`; Moods `homey.mood.set` + `homey.mood.readonly`. Then Homey app → Settings → Dashboard Studio → Settings → **Personal API Key**; green badges confirm each permission. Never ask the user to paste the key into the chat and never write it with `apps_set_setting`.
-- **Publishing items:** Dashboard Studio settings → Configuration → **System & Automation** (below the devices): toggle User Variables, Flows (grouped by folder) and Zone Moods (grouped by zone), then **Save Settings**. Where these selections are stored is not verified, so let the user toggle them in the UI.
-- **Topic names:** created server-side; the format is not documented. Take them verbatim from the discovery call. `special` there shows `flow`/`mood`/`variable`, `cap` and `set`/`get` (W = set without get).
-- **Widget:** write-only flow and mood topics belong on a `switch` with `mode: "push"` (that is also what the Auto-Widget Gallery picks).
-- **Cooldowns:** a flow can be started once per **10 s**, a mood once per **3 s**; extra taps are ignored. Never bind a flow or mood to a slider or a constantly changing topic.
-- Starting a flow or activating a mood has real effects in the house – test-press only after the user's explicit confirmation.
-
-## Flow cards (verified v2.1.0)
-
-| card id (`homey:app:com.satoer.dashboardstudio:…`) | kind | purpose / arguments |
-|---|---|---|
-| `dashboard_send` | action | "Send to Dashboard Studio": `name`, `value` → topic `homey/event/<name>` |
-| `dashboard_send_insights` | action | "Send Insight": `insight_id`, `time_range` (`today`, `last_hour`, `last_6_hours`, `last_24_hours`, `last_7_days`, `last_30_days`, `last_year`), `datapoints` (2–500, default 20) |
-| `dashboard_send_insights_advanced` | action | "Get Insight Data (Advanced)": same arguments, returns tokens only |
-| `dashboard_reload` | action | "Reload Dashboard": `dashboard_name` |
-| `load_filter_ical` | action | "Load & Filter iCal": `url`, `target_mode`, `custom_start`, `custom_end` → token **Filtered Events (JSON)** |
-| `webcal_to_markdown` | action | "Convert iCal JSON to Markdown": `format` → token **Calendar Markdown** |
-| `combine_ical_data` | action | "Combine Calendar Events": `events_token_a`, `events_token_b` |
-| `dashboard_trigger` | trigger | "Dashboard Studio event triggered": `name`. Fires when a widget publishes `homey/event/<name>` or a topic WITHOUT `/` (auto-prefixed, `drivers/homey.js`) |
-| `dashboard_loaded` | trigger | "Dashboard Loaded / Refreshed" – since v2.0.13 no longer on browser tab switches |
-| `dashboard_saved` | trigger | "Dashboard Saved" |
-
-**Calendar (behaviour change in v2.0.13):** `webcal_to_markdown` is always anchored to **today** and shows only days contained in the loaded range. Setups where loader range = displayed range can lose days (e.g. "Yesterday" on the 1st of a month); HomeyScripts that parse the JSON token may break.
-- Pattern: ONE `load_filter_ical` with `target_mode: "previous_current_next_month"`, then several `webcal_to_markdown` cards side by side, each to its own event (`homey/event/cal_today`, `homey/event/cal_week`, …), shown in `text` widgets.
-- `target_mode`: `previous_current_next_month` (recommended), `today`, `yesterday`, `tomorrow`, `day_after_tomorrow`, `start_this_week`, `start_previous_week`, `start_next_week`, `start_this_month`, `start_previous_month`, `start_next_month`, `custom`.
-- `format`: `day_view`, `tomorrow_day_view`, `yesterday_day_view`, `today_tomorrow_list`, `week_view`, `next_week_view`, `previous_week_view`, `workweek_view`, `next_workweek_view`, `previous_workweek_view`, `weekend_view`, `next_weekend_view`, `month_view`, `next_month_view`, `previous_month_view`, `month_workweek_view`, `next_month_workweek_view`, `month_weekend_view`, `next_month_weekend_view`, `days_from_date_1` … `days_from_date_7`.
-- Several calendars: load serially (A → B → `combine_ical_data` → convert). Parsing still needs noticeable memory on Homey.
-
-## Graph widget
-
-- **Data:** a JSON string or array of `{t: ISO-timestamp, v: number}` (sorted by `t`), a comma list of numbers, or an object `{label: value}`. Insight entries fit directly.
-- **Defaults that bite:** `maxPoints` defaults to **20** (set e.g. 400), `showAxisX`/`showAxisY` default false, `label` shows a caption "GRAPH" unless set to `""`.
-- Key fields: `type` (`line`, `smooth`, `bar`, `text`), `lineColor`, `fillCol`, `fill`, `fillOpacity`, `lineWidth`, `autoMin`/`min`, `autoMax`/`max`, `headroom`, `decimals`, `showAxisX`, `showAxisY`, `axisWidthX`, `axisWidthY` (fixed reserved space), `axisResY` (number of Y labels), `axisXFontColor`, `axisYFontColor`, `timeFormat` (`HH:mm`, `Date`, `DateHours`, `HH`, `Datapoints`, `TextLabels`), `dateFormat` (`DD-MM`, …), `time24h`, `timezoneConvert`, `gridHInnerShow`/`Col`/`Op`, `gridHBotShow`, `padding`, `container`.
-- **X labels:** use `linearTimeScale: false`, `autoAxisResX: false`, `axisResX: <every n-th point>` (e.g. 24 for 144 points per day or 168 hourly points per week). `linearTimeScale: true` together with `axisResX` produced unreadable, overlapping labels.
-- `smooth` can overshoot below `min`; use `line` for overlays with a fixed scale.
-- **Combining two measures in one chart (verified):** a graph shows one series, so place two graph widgets with **identical x/y/width/height and identical reserved axes** on top of each other (second one with higher `zIndex`, `fill: false`). Keep `showAxisX: true` and the same `axisWidthX` on BOTH, and make the top one's labels transparent (`axisXFontColor`/`axisYFontColor: "rgba(0,0,0,0)"`, grid off); otherwise the top graph's plot area is taller and its line runs below the bottom edge.
-- **Second scale on the right (verified):** give the top graph a fixed scale bound to precomputed min/max events: `autoMin: false`, `autoMax: false`, `headroom: 0`, `bindings: {min: "homey/event/s_x_min", max: "homey/event/s_x_max"}`, `min_bind_formula: "round(value - 0.5)"`, `max_bind_formula: "round(value + 0.5)"`. Narrow both graphs by ~46 px and put 4 small text widgets in that strip, one per grid line, showing `{{round((LO + k*(HI-LO)/3)*10)/10}}°` with the same LO/HI expressions. Plot area: top ≈ `y + 5`, bottom = `y + height - axisWidthX`; with `axisResY: 4` the grid lines are at 0, 1/3, 2/3 and 1 of that span.
-
-## Live values in text (Markdown)
-
-- Insert a value: `{{topic}}`, e.g. `{{my-inverter/measure_power}} W`
-- Formula: `{{round({{topic}}, 0)}}`; for one decimal: `{{round({{topic}} * 10, 0) / 10}}`
-- Floor/ceil (no such functions): `round(x - 0.5)` / `round(x + 0.5)`.
-- Condition: `{{if({{topic}} < 0, "[color @success]Export[/color]", "[color @danger]Import[/color]")}}`
-- Value inside a condition: `{{if({{t}} >= 1000, "[color @danger]"+round({{t}}, 0)+" ppm[/color]", "[color @success]"+round({{t}}, 0)+" ppm[/color]")}}` (verified)
-- Allowed functions: `round min max abs if number and or not xor nor contains containsanycase`. Comparisons: `< <= > >= ==`. `+` also concatenates text.
-- Markup: `[color @danger]…[/color]`, `[blink]…[/blink]`, icons `:ph-sun:` or `:ph-flame|32|@danger:` (name, size, color), tables, `#` headings.
-- **Length limit:** a single `{{…}}` expression of roughly 500+ characters fails silently and renders `-`. Long topic names repeated many times hit this fast. Split long logic into several short, independent expressions placed next to each other.
-- Verified pattern, compass direction from an angle (one short expression per sector, only one prints):
-  `{{if(A<22.5,"N",if(A>=337.5,"N",""))}}{{if(A>=22.5,if(A<67.5,"NO",""),"")}}…{{if(A>=292.5,if(A<337.5,"NW",""),"")}}` with `A` = `{{topic}}`. A single 8-level nested `if` with `or()` failed.
-
-## Binding options and field formulas
-
-These are stored in `overrides` next to the field, using the pattern `<field>_bind_<option>`:
-
-- **Boolean field from a number** (e.g. `animationEnabled`, `active`, `visible`): `"animationEnabled_bind_transformMode": "numericFormula"` and `"animationEnabled_bind_formula": "value > 20"`. A result other than 0 means true.
-- **Number field** (e.g. `thickness`, graph `min`/`max`): `"thickness_bind_formula": "min(max(abs(value) / 300, 3), 18)"`, with no transformMode.
-- **Map text to a boolean:** `"visible_bind_mapTrue": "on"`, `"visible_bind_mapFalse": "off"`.
-- In formulas, `value` (or `x`) is the bound payload. Other topics are referenced as `{{topic}}`. Maximum length is 512 characters.
-
-Proven patterns for energy flows:
-- Animate a line only when power flows: `bindings.animationEnabled = topic` with formula `value > 20`.
-- Line width scaled to power: `bindings.thickness = topic` with formula `min(max(value / 300, 3), 18)`.
-- Grid direction: draw the line from the house to the grid, so export runs forward. Then `bindings.animationReverse = <grid meter>/measure_power` with formula `value > 0`, so import runs backwards. Check the meter's sign convention first, and use `abs(value)` for the width.
-- Glowing icon: `bindings.active = topic`, `active_bind_transformMode = numericFormula`, formula `value > 20` (or `value > 0`, e.g. rain).
-
-## Colors
-
-Theme corrections (master theme): since v2.0.13 the sliders are **Color Tone** (formerly Hue Shift, −180° to +180°), **Color Intensity** (formerly Saturation, 0–200 %), **Brightness** and **Contrast**. JSON keys not verified – read them from the source before setting them. Since v2.1.0 themes change only visual styling, never layout or behaviour.
-
-Theme tokens: `@background @backgroundAccent @surface @surfaceAlt @text @textMuted @accent @accentSoft @accentSecondary @icon @iconMuted @success @warning @danger @glow @border @borderAccent @onAccent`. Hex, RGB, HSL and CSS color names also work. For overlays use explicit hex colors per measure and repeat them in the legend text (`[color #38bdf8]━ Last %[/color]`).
-
-## Fallback: public demo editor
-
-If the user's editor cannot be reached, test layout and formulas in `https://satoer.com/dashboardstudio/demo/editor.html` with the same loading code, but set `data.master.connection = {dataDriver: 'simulation', driverSettings: {interval: 1000}}` and feed sample values with `Dashboard.applyLocalTopicPayload(topic, value)`. Topic names must still come from the user's list; the demo cannot verify them. The public demo is not a LAN address, so it does not ask per action – use it for layout iterations that need many calls, and the user's editor only for the final probe and the commit.
-
-## Reference sources
-
-- Demo dashboard with many widget examples: `https://satoer.com/dashboardstudio/demo/dashboards/demo.json` (fetch it from inside the demo tab).
-- Help content and release notes: preferably the local copies on the Homey (`help/help-content.json`, `release-changelog.json`), read via HomeyScript. Public release notes: `https://satoer.com/dashboardstudio/changelog.json`. Announcements and discussion: Homey Community thread "[APP][Pro] Dashboard Studio" (topic 151169); single posts as JSON via `https://community.homey.app/posts/<post-id>.json`.
-- Saved dashboards on the user's Homey: `http://<ip>:5050/dashboards/<Name>.json`.
-- Widget source code on the user's Homey: `http://<ip>:5050/widgets/<type>.js` (from HomeyScript: `http://127.0.0.1:5050/…`), startup and save logic in `dashboard.js`, driver in `drivers/homey.js`.
-- Documentation pages on satoer.com block automated fetchers (robots.txt). Read them only if the user opens them in their own browser view, and do not work around the block.
 
 ## Pitfalls
 
