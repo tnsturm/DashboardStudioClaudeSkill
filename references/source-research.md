@@ -2,7 +2,7 @@
 
 Reading the app's own source and help via HomeyScript, the Auto-Widget Gallery, variables/flows/moods with a Personal API Key, and further reference sources.
 
-## Source research without the browser (verified v2.1.0)
+## Source research without the browser (verified v2.2.0)
 
 The editor web server is reachable from HomeyScript on the Homey itself at `http://127.0.0.1:5050/`. This costs the user **no approval click**. Use `homeyscript_run` with inline `code` and `dry_run: true` (GET fetches are allowed in a dry run). Useful files:
 
@@ -13,6 +13,7 @@ The editor web server is reachable from HomeyScript on the Homey itself at `http
 | `help/help-content.json` (~415 KB) | the full official help of the installed version (satoer.com blocks automated fetchers) |
 | `widgets/<type>.js` | config keys (`c.<field>`), defaults (`static get globalSettings`), `dependsOn` rules |
 | `dashboard.js`, `drivers/homey.js`, `save-format-v2.js` | load/save/publish logic, on-disk format |
+| `topic-alias.js` | canonical ↔ legacy names for variables, flows, moods (since v2.2.0) |
 | `scripts/auto-widget-gallery.js` | the app's own topic → widget classifier (see "Auto-Widget Gallery") |
 | `dashboards/<Name>.json` | saved dashboards |
 
@@ -51,7 +52,7 @@ const skel = entries.map(e => ({name: e.name, type: e.type, rule: e.ruleId, tile
 - **Not needed for:** reading variables (read-only works without a key), sensors, and normal device control.
 - **The user creates the key, never Claude:** Homey Web App → Settings → API Keys → New API Key. Scopes: Variables `homey.logic`; Flows `homey.flow.start` + `homey.flow.readonly`; Moods `homey.mood.set` + `homey.mood.readonly`. Then Homey app → Settings → Dashboard Studio → Settings → **Personal API Key**; green badges confirm each permission. Never ask the user to paste the key into the chat and never write it with `apps_set_setting`.
 - **Publishing items:** Dashboard Studio settings → Configuration → **System & Automation** (below the devices): toggle User Variables, Flows (grouped by folder) and Zone Moods (grouped by zone), then **Save Settings**. Where these selections are stored is not verified, so let the user toggle them in the UI.
-- **Topic names:** created server-side; the format is not documented. Take them verbatim from the discovery call. `special` there shows `flow`/`mood`/`variable`, `cap` and `set`/`get` (W = set without get).
+- **Topic names (since v2.2.0, `topic-alias.js`):** variables `homey/variables/<name>/value`, flows `homey/flows/<name>/start` (and `/enabled`), moods `homey/moods/<name>/set`. Legacy aliases `<name>/value`, `<name>/start`, `mood-<name>/set` still resolve. `<name>` is still created server-side – take it verbatim from the discovery call, which now lists both forms. `special` there shows `flow`/`mood`/`variable`, `cap` and `set`/`get` (W = set without get).
 - **Widget:** write-only flow and mood topics belong on a `switch` with `mode: "push"` (that is also what the Auto-Widget Gallery picks).
 - **Cooldowns:** a flow can be started once per **10 s**, a mood once per **3 s**; extra taps are ignored. Never bind a flow or mood to a slider or a constantly changing topic.
 - Starting a flow or activating a mood has real effects in the house – test-press only after the user's explicit confirmation.

@@ -6,7 +6,7 @@ File schema, widget types and fields, graph widget, live values and formulas in 
 
 ```json
 {
-  "version": "<installed version from version.js, e.g. 2.1.0>",
+  "version": "<installed version from version.js, e.g. 2.2.0>",
   "master": {
     "connection": {"dataDriver": "homey", "driverSettings": {}},
     "environment": {
