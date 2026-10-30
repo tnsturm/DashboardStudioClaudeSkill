@@ -14,7 +14,7 @@ Switches the editor to the Homey platform, waits, and returns the topic list plu
 
 ```js
 if (typeof Dashboard === 'undefined') { 'NOT_LOADED' } else {
-const minimal = {version: window.DASHBOARD_VERSION || "2.1.0", master:{connection:{dataDriver:"homey",driverSettings:{}},
+const minimal = {version: window.DASHBOARD_VERSION || "2.2.0", master:{connection:{dataDriver:"homey",driverSettings:{}},
   environment:{canvas:{width:1280,height:800},theme:"default_dark",layout:{mode:"scale",scale:{keepAspectRatio:true}}}},
   globalBindings:{}, widgets:{}, groups:{}, selectionGroups:{}};
 if (!Dashboard._isHomeyPlatform()) { await Dashboard.loadDashboardData(minimal); }

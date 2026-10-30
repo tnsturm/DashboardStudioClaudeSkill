@@ -5,12 +5,12 @@ description: "Builds, changes and repairs importable JSON dashboards for the Hom
 
 # Dashboard Studio – generating JSON dashboards
 
-**Skill version 2.1.0** – matches the Dashboard Studio version it was verified against (`com.satoer.dashboardstudio` 2.1.0).
-**Requires MCP AI Bridge** (`community.mcp-ai-bridge`) – tested with **5.2.1**. If the installed Dashboard Studio or bridge version differs, mention it to the user; for a different bridge version check the bridge-dependent steps (tool names, `homeyscript_run` with `dry_run`, `apps_get_settings`).
+**Skill version 2.2.0** – matches the Dashboard Studio version it was verified against (`com.satoer.dashboardstudio` 2.2.0).
+**Requires MCP AI Bridge** (`community.mcp-ai-bridge`) – tested with **5.2.6**. If the installed Dashboard Studio or bridge version differs, mention it to the user; for a different bridge version check the bridge-dependent steps (tool names, `homeyscript_run` with `dry_run`, `apps_get_settings`).
 
 Applies ONLY to the Homey app **Dashboard Studio** by Satoer (app ID `com.satoer.dashboardstudio`). Do not use it for the MCP AI Bridge's own dashboard (`dashboard_generate`) or for native Homey dashboards (`homey_dashboards_*`).
 
-Knowledge verified against Dashboard Studio **v2.1.0** (test channel, released 2026-10-19) on a Homey Pro (2026), checked 2026-10-21. If the installed version is newer, read the app's own release notes first (`release-changelog.json`, see "Source research without the browser" in `references/source-research.md`) and re-check anything they touch.
+Knowledge verified against Dashboard Studio **v2.2.0** (test channel, released 2026-10-24) on a Homey Pro (2026), checked 2026-10-30 from the app's own source and help via HomeyScript (not yet run-tested in the editor). If the installed version is newer, read the app's own release notes first (`release-changelog.json`, see "Source research without the browser" in `references/source-research.md`) and re-check anything they touch.
 
 Tool names below are given without their MCP prefix (e.g. `apps_get` = `<prefix>homey-bridge__apps_get`, `javascript_tool` = `<prefix>Claude_Browser__javascript_tool`).
 
@@ -22,6 +22,16 @@ Tool names below are given without their MCP prefix (e.g. `apps_get` = `<prefix>
 | `references/widgets.md` | before generating or editing the dashboard JSON (schema, widget fields, graphs, text formulas, bindings, colors) |
 | `references/data-feeds.md` | a value is not a device capability, or flow cards / calendars are involved |
 | `references/source-research.md` | after an app update, for unknown widget fields, the Auto-Widget Gallery, or variables/flows/moods |
+
+## Changes in v2.2.0 (take precedence over the reference files if they still say otherwise)
+
+- **Send Insight** (`dashboard_send_insights`, `…_advanced`) has an optional `topic` argument → `homey/insight/<topic>`. Several time ranges of one insight can now coexist; the HomeyScript feed is no longer needed just for that.
+- **`webcal_to_markdown`** also takes a custom `topic`.
+- New flow cards: action `fetch_rss_markdown` (`urls`, `layout`, `image_width`, `max_items`, `date_format`, `topic` → `homey/event/<topic>`; Markdown table for a `text` widget), trigger `dashboard_page_opened` (`dashboard_name`, `page`), conditions `dashboard_is_open` (`dashboard_name`) and `dashboard_is_open_page` (`dashboard_name`, `page`). Use the conditions to skip heavy feeds while no dashboard is open.
+- Variables/flows/moods use canonical `homey/variables|flows|moods/…` topics with legacy aliases (see "Topic names"); source in `topic-alias.js`.
+- New app settings: **State Caching** (Full / Optimized) and **Capability & Topic Cleanup** (see "Pitfalls"). Calendar settings tab renamed to **Flow Cards**.
+- Fixed: all-day calendar events no longer shift a day at a DST change (author: not fully verifiable until the next DST change).
+- Unchanged in v2.2.0: JSON schema, widget types, import/export, device topic naming, editor port 5050, `LATEST_MIGRATION_VERSION` 2.0.0.
 
 ## Browser budget – the most important rule
 
@@ -41,7 +51,7 @@ Target for a new dashboard: **4 browser calls** – 1 open editor, 1 discovery c
 1. **MCP AI Bridge reachable?** Check that Homey bridge tools are available in this session, then call `system_get_info`. If the tools are missing or the call fails, stop and tell the user: the Homey app **MCP AI Bridge** (`community.mcp-ai-bridge`) must be installed, running and connected to Claude.
 2. **Bridge app running?** `apps_get` with `community.mcp-ai-bridge` → `state` must be `running` and `enabled: true`. Report the version.
 3. **Dashboard Studio installed?** `apps_get` with `com.satoer.dashboardstudio` → `state: running`. Note `version`. If it is not installed, tell the user to install it from the Homey App Store and stop.
-4. **Find the editor URL.** First `apps_get_settings` on `com.satoer.dashboardstudio` and look for any URL, host or port key. Up to v2.1.0 the readable settings hold only `enabled_capabilities` (a Personal API Key, if set, appears as `<redacted>`), so build it from `system_get_info`: `ethernetAddress` (or `wifiAddress` when ethernet is not connected) plus port **5050** (verified default). Editor `http://<ip>:5050/editor.html`, viewer `http://<ip>:5050/viewer.html?dashboard=<name>`.
+4. **Find the editor URL.** First `apps_get_settings` on `com.satoer.dashboardstudio` and look for any URL, host or port key. Up to v2.2.0 the readable settings hold only `enabled_capabilities` (a Personal API Key, if set, appears as `<redacted>`), so build it from `system_get_info`: `ethernetAddress` (or `wifiAddress` when ethernet is not connected) plus port **5050** (verified default). Editor `http://<ip>:5050/editor.html`, viewer `http://<ip>:5050/viewer.html?dashboard=<name>`.
 5. **Browser available?** The editor runs on a private LAN address, so it is reachable only from a browser on the user's network. Use the **built-in Claude browser** (`Claude_Browser__*` tools; load them all with one ToolSearch on the full prefix, and read the `built-in-browser` skill first). Claude in Chrome also works when it is connected, but it has proven unstable (background tabs block screenshots, the extension disconnects). If neither browser is reachable, fall back to handing over the JSON for manual import.
 
 ## Workflow
@@ -60,8 +70,9 @@ Target for a new dashboard: **4 browser calls** – 1 open editor, 1 discovery c
 - The only valid source for device topic names is the Data Stream Explorer / live topic list of the user's editor. Copy names verbatim (case, dots and hyphens included).
 - Background only, not for building names: topics have the form `<slug of the device name>/<capability>`. The slug is lower-case, umlauts and other special characters become `-`, and trailing spaces in the device name produce a trailing `-` (e.g. device "Wetter Poolhütte " → `wetter-poolh-tte-/measure_co2`). Renaming a device can change its topic, so after a rename read the list again.
 - If a needed value is missing from the list, the capability is not enabled yet: go back to workflow step 2.
-- Other topic kinds: `local/<name>` lives only inside the browser and is useful for UI wiring between widgets. `homey/event/<name>` is sent by the Flow card "Send to Dashboard Studio" (`dashboard_send`, args `name`, `value`). `homey/insight/<name>` is sent by the Flow card "Send Insight", where `<name>` is the full autocomplete name of the insight (e.g. `homey/insight/system - loadavg (CPU Load)`). Event names may be chosen freely, but verify in the probe call that they actually arrive (`missingLive`).
-- Before testing or handing over, check programmatically that every `{{topic}}` in texts (including nested ones inside formulas) and every value in `bindings` is contained in the saved topic list (device topics) or is a known event topic. Report any mismatch instead of delivering.
+- **Variables, flows and moods (since v2.2.0):** canonical topics are `homey/variables/<name>/value`, `homey/flows/<name>/start` (or `/enabled`) and `homey/moods/<name>/set`. The pre-2.2.0 names (`<name>/value`, `<name>/start`, `mood-<name>/set`) keep working as aliases (`topic-alias.js`); the live topic list contains BOTH forms. Use the canonical `homey/…` form in new dashboards, never mix both forms for the same item, and leave existing dashboards as they are unless the user asks.
+- Other topic kinds: `local/<name>` lives only inside the browser and is useful for UI wiring between widgets. `homey/event/<name>` is sent by the Flow card "Send to Dashboard Studio" (`dashboard_send`, args `name`, `value`). `homey/insight/<name>` is sent by the Flow card "Send Insight": without the optional `topic` argument `<name>` is the full autocomplete name of the insight (e.g. `homey/insight/system - loadavg (CPU Load)`); with `topic` set (since v2.2.0) it is `homey/insight/<topic>`. Event names may be chosen freely, but verify in the probe call that they actually arrive (`missingLive`).
+- Before testing or handing over, check programmatically that every `{{topic}}` in texts (including nested ones inside formulas) and every value in `bindings` is contained in the saved topic list (device topics) or is a known event topic. For variables, flows and moods accept the canonical and the legacy form. Report any mismatch instead of delivering.
 
 A wrong topic shows an empty field without any error.
 
@@ -84,4 +95,6 @@ A wrong topic shows an empty field without any error.
 - Flow starts and moods have cooldowns (10 s / 3 s); taps within that time are silently ignored.
 - Calendar views since v2.0.13 are relative to today: the loader range must cover every displayed day.
 - Fixed in v2.1.0: formulas that reference the same topic several times evaluate reliably; earlier versions could show wrong values there. Since v2.0.15 interactive widgets no longer overwrite their bound input topic when clicked.
+- State caching (since v2.2.0, app setting **State Caching**: *Full* or *Optimized (< 16 KB events)*): in Optimized mode large event payloads (Markdown tables, graph histories, SVG) are not cached, so those widgets stay empty after a reload until the data feed sends again. Before diagnosing an empty Text/Graph widget, ask which mode is set or let the feed resend; for heavy feeds prefer a trigger on `dashboard_loaded` or `dashboard_page_opened`.
+- New in v2.2.0: the **Capability & Topic Cleanup** tool (app settings → Configuration) disables capabilities that no saved dashboard references. A dashboard only built as a draft or JSON file is not "saved", so its capabilities can be offered for removal – tell the user before they run it.
 - Never save to Homey or overwrite an existing dashboard name without explicit confirmation; create scripts and flows on Homey only after confirmation.
