@@ -6,7 +6,7 @@ File schema, widget types and fields, graph widget, live values and formulas in 
 
 ```json
 {
-  "version": "<installed version from version.js, e.g. 2.2.0>",
+  "version": "<installed version from version.js, e.g. 2.3.1>",
   "master": {
     "connection": {"dataDriver": "homey", "driverSettings": {}},
     "environment": {
@@ -31,7 +31,7 @@ File schema, widget types and fields, graph widget, live values and formulas in 
 - `dataDriver` is one of `homey`, `mqtt`, `nodered` or `simulation`. Use `homey` for the user's own Homey; it also switches the editor's platform on load.
 - `layout.mode`: `fixed` uses exact pixels ("Fixed Resolution"), `scale` scales to the window using the same coordinates ("Scale to Fit Screen"), `responsive` uses columns ("Responsive Columns").
 - Themes include `default_dark`, `eink_dark`, `eink_light`, `midnight_blue`, `deep_space`, `executive_suite` and `paper_white` (35+ built in).
-- **Widget object:** `type`, `overrides` (position and all properties) and `bindings` (field → topic). Required in `overrides`: `x`, `y`, `width`, `height`, `page` (a number or a string like `"1, 2, 7-12"`). Optional: `metaName` (name shown in the editor), `zIndex`, `visible`, `locked`, and `container: {"show": false}` to hide the card frame.
+- **Widget object:** `type`, `overrides` (position and all properties) and `bindings` (field → topic; can be nested, e.g. graph `series[i].data` since v2.3.0 – walk bindings recursively when collecting topics). Required in `overrides`: `x`, `y`, `width`, `height`, `page` (a number or a string like `"1, 2, 7-12"`). Optional: `metaName` (name shown in the editor), `zIndex`, `visible`, `locked`, and `container: {"show": false}` to hide the card frame.
 - Unknown field names: take them from an Auto-Widget Gallery skeleton or read them from the widget source via HomeyScript (see "Source research without the browser" in `source-research.md`), never by trial and error with extra browser calls.
 
 ## Widget types and key fields
@@ -44,7 +44,7 @@ File schema, widget types and fields, graph widget, live values and formulas in 
 | `arrow` | line or arrow with flow animation | `fromX`, `fromY`, `toX`, `toY` (absolute canvas coordinates), `customPoints:[{x,y}]` for bends, `pathBendRadius`, `thickness`, `headSize` (0 = no head), `lineRadius`, `headRound`, `mainColor`, `animationEnabled`, `animationSpeed`, `animationReverse`, `flowWidth`, `gradientWidth`, `enableGlow` | `animationEnabled`, `animationReverse`, `thickness`, `visible`, colors |
 | `gauge` | round or horizontal gauge | `label`, `unit`, `min`, `max`, `decimals`, `showIcon` (default true, shows a thermometer!), `gaugeCol0`, `gaugeCol100`, `barThickness`, `trackThickness`, `gapRound`, `gaugeSizeOffset` | `value` |
 | `battery` | battery bar (no numeric % shown) | `label`, `vertical` | `value` |
-| `graph` | line, bar or big-number chart, ONE series | see "Graph widget" | `data`, plus numeric fields such as `min`, `max` |
+| `graph` | line, stepped, bar or big-number chart; several series per widget since v2.3.0 | see "Graph widget" | `series[i].data` (nested), per-series colors, numeric fields such as `min`, `max` |
 | `switch` | toggle or push button, also navigation | `buttonLabel`, `mode` (`toggle`/`push`), `style` (`switch`/`button`), `actionType` (`topic`/`page`/`url`), `pageTo` (target page for `page`), `urlTo`, `urlNewTab`, `outputTopic`, `separateOnOffTopics` + `outputTopicOff`, `onPayload`, `offPayload`, `showIcon`, `iconSize`, `icons` | `state` |
 | `slider` | dimmer or setpoint | `min`, `max`, `vertical` | `value` |
 | `list` | log or feed | – | `data` |
@@ -61,15 +61,37 @@ File schema, widget types and fields, graph widget, live values and formulas in 
 
 **Navigation buttons (verified):** a `switch` with `mode: "push"`, `style: "button"`, `actionType: "url"`, `urlTo: "viewer.html?dashboard=<Name>"`, `urlNewTab: false`, `buttonLabel`, `showIcon: true`, `icons: {on:{source:"phosphor",builtin:"ph-cpu",weight:"fill",color:"#38bdf8"}, off:{…}}`. Ideal for a start page saved as `dashboard`.
 
-## Graph widget
+## Graph widget (rewritten in v2.3.0)
 
-- **Data:** a JSON string or array of `{t: ISO-timestamp, v: number}` (sorted by `t`), a comma list of numbers, or an object `{label: value}`. Insight entries fit directly.
-- **Defaults that bite:** `maxPoints` defaults to **20** (set e.g. 400), `showAxisX`/`showAxisY` default false, `label` shows a caption "GRAPH" unless set to `""`.
-- Key fields: `type` (`line`, `smooth`, `bar`, `text`), `lineColor`, `fillCol`, `fill`, `fillOpacity`, `lineWidth`, `autoMin`/`min`, `autoMax`/`max`, `headroom`, `decimals`, `showAxisX`, `showAxisY`, `axisWidthX`, `axisWidthY` (fixed reserved space), `axisResY` (number of Y labels), `axisXFontColor`, `axisYFontColor`, `timeFormat` (`HH:mm`, `Date`, `DateHours`, `HH`, `Datapoints`, `TextLabels`), `dateFormat` (`DD-MM`, …), `time24h`, `timezoneConvert`, `gridHInnerShow`/`Col`/`Op`, `gridHBotShow`, `padding`, `container`.
-- **X labels:** use `linearTimeScale: false`, `autoAxisResX: false`, `axisResX: <every n-th point>` (e.g. 24 for 144 points per day or 168 hourly points per week). `linearTimeScale: true` together with `axisResX` produced unreadable, overlapping labels.
-- `smooth` can overshoot below `min`; use `line` for overlays with a fixed scale.
-- **Combining two measures in one chart (verified):** a graph shows one series, so place two graph widgets with **identical x/y/width/height and identical reserved axes** on top of each other (second one with higher `zIndex`, `fill: false`). Keep `showAxisX: true` and the same `axisWidthX` on BOTH, and make the top one's labels transparent (`axisXFontColor`/`axisYFontColor: "rgba(0,0,0,0)"`, grid off); otherwise the top graph's plot area is taller and its line runs below the bottom edge.
-- **Second scale on the right (verified):** give the top graph a fixed scale bound to precomputed min/max events: `autoMin: false`, `autoMax: false`, `headroom: 0`, `bindings: {min: "homey/event/s_x_min", max: "homey/event/s_x_max"}`, `min_bind_formula: "round(value - 0.5)"`, `max_bind_formula: "round(value + 0.5)"`. Narrow both graphs by ~46 px and put 4 small text widgets in that strip, one per grid line, showing `{{round((LO + k*(HI-LO)/3)*10)/10}}°` with the same LO/HI expressions. Plot area: top ≈ `y + 5`, bottom = `y + height - axisWidthX`; with `axisResY: 4` the grid lines are at 0, 1/3, 2/3 and 1 of that span.
+Source-verified 2026-11-03 from `widgets/graph.js` and `migrator.js` of v2.3.1; not yet run-tested in the editor. Items marked "(verified < 2.3)" were run-tested on the old widget and must be re-checked in the probe call.
+
+- **Several series per widget:** `overrides.series` is an array. Series fields: `id` (unique, e.g. `"s_pv"`), `name`, `nameLocked`, `visible`, `data`, `lineWidth`, `positiveColor`, `negativeColor`, `positiveFillColor`, `negativeFillColor`, `positiveStartOpacity` (default 40), `positiveEndOpacity` (default 0), `negativeStartOpacity`, `negativeEndOpacity`, `pointColor`, `valueMultiplier` (0 = off, e.g. `0.001` for W → kW), `positiveOutlineColor`, `negativeOutlineColor`. The fill is a gradient from start to end opacity; no fill = start opacity 0. Missing colors fall back to the theme marker tints.
+- **Binding the data (nested):** `"bindings": {"series": [{"data": "<topic A>"}, {"data": "<topic B>"}]}`, index-aligned with `overrides.series`. Per-series colors bind the same way (`bindings.series[i].positiveColor`).
+- **Removed keys** (the widget drops them): top-level `lineColor`, `fillCol`, `negFillCol`, `fillOpacity`, `lineWidth`, `fill`, `barColor`, `pointColor`, `linearTimeScale`, and `bindings.data`. Old dashboards are migrated on load (`migrator.js`, rule 2.3.0 "Graph multi-series"; it also runs for files with a current `version` that still have the old shape). New JSON must use `series`.
+- **Data:** unchanged – a JSON string or array of `{t: ISO-timestamp, v: number}` (sorted by `t`), a comma list of numbers, or an object `{label: value}`. Insight entries fit directly.
+- **Types (`type`):** `line`, `smooth` (`smoothingAmount` 0–100), `stepped` (new – on/off states, setpoints), `bar` (`barDirection`: `vertical`/`horizontal`, `barGap`, `barRadius`), `text` (big number).
+- **Defaults that bite:** `maxPoints` **20** in `bufferMode: "points"` (set e.g. 400); `showLegend` **true** (legend on the right) – set `false` for a single series; `showAxisX`/`showAxisY` false; `label` default "Graph" – set `""`; `timeFormat` default `Datapoints`.
+- **Time window instead of point count (new):** `bufferMode: "duration"` with `durationPreset` (`15m`, `1h`, `6h`, `12h`, `24h`, `7d`, `30d`, `custom` + `durationCustomValue` and `durationCustomUnit` `minutes`/`hours`/`days`), `fixedTimeWindow`, `timelineAdvance` (`data` or `time` = glides with the real clock). Also `reverseDirection`, `lineGaps` (`break` / `connect`).
+- **Scale:** canonical `dynamicFloor` / `dynamicCeiling` (default true) and `fixedFloor` / `fixedCeiling`. The old `autoMin`/`autoMax` and `min`/`max` are still read as fallback when the new keys are absent. Since v2.3.0 the dynamic floor fits the data instead of being forced to 0. Further: `headroom`, `useBaseline` + `baselineVal`, `negMode` (`show_neg`, `show_pos`, `ignore`), `decimals`, `roundingMode` (default `smart`).
+- **Axes and grid:** `showAxisX`, `showAxisY`, `axisWidthX`, `axisWidthY` (fixed reserved space), `axisResX`, `axisResY`, `autoAxisResX`, `autoAxisResY`, `axisXFontColor`/`axisYFontColor`, `axisXFontOpacity`/`axisYFontOpacity` (0–100, new), `categoryLabelRotation` (tilted labels), `timeFormat` (`Datapoints`, `TextLabels`, `DateHours`, `Date`, `HH`, `HH:mm`, `HH:mm:ss`), `dateFormat` (default `DD-MM-YYYY`), `time24h`, `timezoneConvert`, `gridHInnerShow`/`Col`/`Op`, `gridHBotShow`, `gridV…`, `padding`, `container`.
+- **Legend (new):** `showLegend`, `legendPosition` (`top`, `bottom`, `left`, `right`, `floating`), `legendLayout`, `legendSwatch`, `legendItem…` typography. Tapping an entry toggles that series. A legend replaces hand-written color legends in text widgets.
+- **Point values:** `showPointValues`, `pointValuesInterval`, `pointValuesDecimals`, `pointValuesHoverOnly`, `pointValuesAbbreviate`.
+- **Animation (new):** `graphAnimation` (default `none`), `graphAnimDuration`, `graphAnimStreamDuration`.
+- **X labels (verified < 2.3):** `autoAxisResX: false`, `axisResX: <every n-th point>` (e.g. 24 for 144 points per day or 168 hourly points per week). `linearTimeScale` no longer exists; since v2.3.0 time steps snap to calendar units, so check the labels again.
+- `smooth` can overshoot below the floor; use `line` for overlays with a fixed scale.
+- **Two measures with the same unit:** two entries in `series` of ONE widget. This replaces the old overlay of two graph widgets.
+- **Two measures with different units (second scale, verified < 2.3):** all series of a widget share one Y scale (no per-series axis key in the source), so a second scale still needs two graph widgets with **identical x/y/width/height and identical reserved axes** on top of each other (second one with higher `zIndex`, fill start opacity 0). Keep `showAxisX: true` and the same `axisWidthX` on BOTH, and hide the top one's labels (`axisXFontOpacity`/`axisYFontOpacity: 0`, grid off); otherwise the top graph's plot area is taller and its line runs below the bottom edge. Give the top graph a fixed scale bound to precomputed min/max events: `dynamicFloor: false`, `dynamicCeiling: false`, `headroom: 0`, `bindings: {min: "homey/event/s_x_min", max: "homey/event/s_x_max"}`, `min_bind_formula: "round(value - 0.5)"`, `max_bind_formula: "round(value + 0.5)"` (the bound `min`/`max` are read because `fixedFloor`/`fixedCeiling` are unset). Narrow both graphs by ~46 px and put 4 small text widgets in that strip, one per grid line, showing `{{round((LO + k*(HI-LO)/3)*10)/10}}°` with the same LO/HI expressions. Plot area: top ≈ `y + 5`, bottom = `y + height - axisWidthX`; with `axisResY: 4` and `autoAxisResY: false` the grid lines are at 0, 1/3, 2/3 and 1 of that span. v2.3.0 changed the title layout and axis steps, so re-check this geometry.
+
+Minimal series graph:
+
+```json
+{"type": "graph",
+ "overrides": {"x": 20, "y": 20, "width": 600, "height": 260, "page": 1, "label": "", "type": "line",
+   "showLegend": false, "showAxisX": true, "showAxisY": true, "maxPoints": 400, "timeFormat": "HH:mm",
+   "series": [{"id": "s_pv", "name": "Solar", "positiveColor": "@accent", "positiveFillColor": "@accent",
+               "positiveStartOpacity": 30, "positiveEndOpacity": 0}]},
+ "bindings": {"series": [{"data": "homey/insight/pv_24h"}]}}
+```
 
 ## Live values in text (Markdown)
 

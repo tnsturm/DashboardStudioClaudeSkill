@@ -35,7 +35,7 @@ When a page mixes two jobs, lead with the main one.
 3. **Plain labels.** Write labels the way you would say them: "Pool water", "Grid import now" – not "Power pulse" or "Aqua status". One label per value. No subtitle under a heading, no caption under a number.
 4. **Every changing number has a comparison.** "12.4 kWh · +2.1 vs yesterday", "21.3 °C · target 21.0", never a bare delta. Comparisons need data (insight histories, computed values) – plan them with `data-feeds.md`. If no comparison is available, show the target or limit instead.
 5. **The biggest thing is the most important thing.** One hero value per page with `mdAutoFitText: true`; at most 4 big numbers per page; at most 5 text sizes on the whole dashboard. The eye must know where to go first, second, third.
-6. **Color means something.** `@success`, `@warning`, `@danger` only for good, watch and bad. `@accent` only for the one thing to look at and the highlighted chart series. Everything else uses `@text`, `@textMuted` or grey. Arrows default to `@success` green – on a flow page set an explicit `mainColor` per measure and keep green for "good". Give each measure one color and use it everywhere (solar is the same color on the flow page and in the chart legend). One theme for the whole dashboard; no per-widget restyling.
+6. **Color means something.** `@success`, `@warning`, `@danger` only for good, watch and bad. `@accent` only for the one thing to look at and the highlighted chart series. Everything else uses `@text`, `@textMuted` or grey. A graph with several series (since v2.3.0) colors each series from the theme marker tints unless set; set `positiveColor` explicitly so that only the important series uses `@accent`. Arrows default to `@success` green – on a flow page set an explicit `mainColor` per measure and keep green for "good". Give each measure one color and use it everywhere (solar is the same color on the flow page and in the chart legend). One theme for the whole dashboard; no per-widget restyling.
 7. **Hard limits per page:** at most 4 sections, at most 5 items per card or list, at most 1 table, at most 4 big numbers, no grid with more than 6 columns. More than that? Keep what the reader acts on and move or cut the rest.
 8. **Say each thing once per page.** The same value does not appear as a gauge, a text value and a graph on one page. Helper bindings (arrow thickness, animation, `visible`) do not count. Totals must add up: values from different devices are sampled at slightly different times, so compute the remainder from the others instead of showing three raw values that never sum.
 9. **Cut, don't hide.** Moving detail to another page is fine only for reference detail. An exception that needs action stays on the status page.
@@ -48,6 +48,7 @@ These go beyond the source above, because a wall dashboard is read hundreds of t
 - **Readable from a distance.** As a rule of thumb, on a wall panel no text below about 16 canvas px on a 1280-px-wide canvas; 13 px is acceptable for phone or desktop pages. Check on the real device.
 - **Color plus word.** A state is never shown by color alone ("Open" in `@danger`, not just a red dot).
 - **Calm when normal.** When everything is fine, the status page is quiet. `[blink]` and `@danger` are reserved for real alarms, so they still stand out.
+- **Back to the status page.** A wall panel should return to the status page after inactivity (environment settings `inactivityPageEnabled`, `inactivityReturnPage`, `inactivityTimeoutSeconds`; set them in the editor). Swipe gestures (v2.3.0, beta) can replace navigation buttons on touch panels, but keep a visible way back for people who do not know the gesture.
 - **Night.** Use a dark theme; if the panel runs at night, consider a dimmed night page or hide non-essential widgets with `visible` bindings.
 - **Touch targets.** Controls at least about 60 canvas px in their short dimension, with space between neighbouring controls.
 
@@ -106,7 +107,9 @@ def design_check(dash, start_page=1, max_start_words=60):
                 words += static_words(txt)
                 for m in TOPIC.finditer(txt): shown[m.group(1)].add(wid)
             for field, topic in (w.get('bindings') or {}).items():
-                if field in DISPLAY_BINDINGS: shown[topic].add(wid)
+                if field in DISPLAY_BINDINGS and isinstance(topic, str): shown[topic].add(wid)
+            for s in (w.get('bindings') or {}).get('series') or []:    # graph series since v2.3.0
+                if isinstance(s, dict) and isinstance(s.get('data'), str): shown[s['data']].add(wid)
             if t == 'battery':
                 warn.append(f'page {p} {wid}: battery widget shows no number')
             if t == 'graph' and o.get('type') != 'text' and not o.get('showAxisY'):

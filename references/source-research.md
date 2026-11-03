@@ -2,14 +2,16 @@
 
 Reading the app's own source and help via HomeyScript, the Auto-Widget Gallery, variables/flows/moods with a Personal API Key, and further reference sources.
 
-## Source research without the browser (verified v2.2.0)
+## Source research without the browser (verified v2.3.1)
 
 The editor web server is reachable from HomeyScript on the Homey itself at `http://127.0.0.1:5050/`. This costs the user **no approval click**. Use `homeyscript_run` with inline `code` and `dry_run: true` (GET fetches are allowed in a dry run). Useful files:
 
 | file | content |
 |---|---|
 | `version.js` | `window.DASHBOARD_VERSION` (use it for the JSON `version` field) and `LATEST_MIGRATION_VERSION` |
-| `release-changelog.json` | the app's full release notes as JSON (`[{version, date, changes[]}]`, newest first) – read this first after an update |
+| `release-changelog.json` | the app's full release notes – read this first after an update. Since v2.3.0 an object `{tagLibrary, releases: [{version, date, changes: [{title, description, tags}]}]}`, newest first (`tags` are ids into `tagLibrary`, e.g. 7 = `graph_widget`); before it was a plain array |
+| `migrator.js` | `MIGRATION_RULES` (one entry per format change) and the migration code, e.g. `_migrateGraphWidgetToSeries` (2.3.0) – shows how old keys map to new ones |
+| `master-layout.js` | `ENVIRONMENT_KEYS` and other master key lists (e.g. swipe gestures, inactivity page) |
 | `help/help-content.json` (~415 KB) | the full official help of the installed version (satoer.com blocks automated fetchers) |
 | `widgets/<type>.js` | config keys (`c.<field>`), defaults (`static get globalSettings`), `dependsOn` rules |
 | `dashboard.js`, `drivers/homey.js`, `save-format-v2.js` | load/save/publish logic, on-disk format |

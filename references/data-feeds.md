@@ -20,7 +20,7 @@ Feeding non-device data (system values, insight histories) and the app's flow ca
 - **Persist only after confirmation:** `homeyscript_create` + a trigger flow. Current values every minute, histories every 5 minutes (check `new Date().getMinutes() % 5` in the script).
 - **Use Advanced Flows.** A basic flow created via `flows_create` runs, but the Homey web app showed it as an EMPTY canvas without card menu (observed on a Homey Pro 2026 where all other flows were Advanced Flows). Create the trigger with `advanced_flows_create` (cron `homey:manager:cron:every_nth` `{n: 1, type: "minute"}` → `homey:app:com.athom.homeyscript:run` with the autocomplete script object), and verify with `homeyscript_last_runs` after ~70 s.
 
-## Flow cards (verified v2.2.0, read from `Homey.flow.getFlowCard*` on a Homey Pro)
+## Flow cards (verified v2.3.1, read from `Homey.flow.getFlowCard*` on a Homey Pro; unchanged since v2.2.0)
 
 | card id (`homey:app:com.satoer.dashboardstudio:…`) | kind | purpose / arguments |
 |---|---|---|
@@ -43,4 +43,5 @@ Feeding non-device data (system values, insight histories) and the app's flow ca
 - Pattern: ONE `load_filter_ical` with `target_mode: "previous_current_next_month"`, then several `webcal_to_markdown` cards side by side, each to its own event (`homey/event/cal_today`, `homey/event/cal_week`, …), shown in `text` widgets.
 - `target_mode`: `previous_current_next_month` (recommended), `today`, `yesterday`, `tomorrow`, `day_after_tomorrow`, `start_this_week`, `start_previous_week`, `start_next_week`, `start_this_month`, `start_previous_month`, `start_next_month`, `custom`.
 - `format`: `day_view`, `tomorrow_day_view`, `yesterday_day_view`, `today_tomorrow_list`, `week_view`, `next_week_view`, `previous_week_view`, `workweek_view`, `next_workweek_view`, `previous_workweek_view`, `weekend_view`, `next_weekend_view`, `month_view`, `next_month_view`, `previous_month_view`, `month_workweek_view`, `next_month_workweek_view`, `month_weekend_view`, `next_month_weekend_view`, `days_from_date_1` … `days_from_date_7`.
+- Since v2.3.0 published calendar links from Outlook.com and Microsoft Exchange work as `url` too; recurring events keep their times across DST changes.
 - Several calendars: load serially (A → B → `combine_ical_data` → convert). Parsing still needs noticeable memory on Homey.

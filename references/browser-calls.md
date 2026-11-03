@@ -14,7 +14,7 @@ Switches the editor to the Homey platform, waits, and returns the topic list plu
 
 ```js
 if (typeof Dashboard === 'undefined') { 'NOT_LOADED' } else {
-const minimal = {version: window.DASHBOARD_VERSION || "2.2.0", master:{connection:{dataDriver:"homey",driverSettings:{}},
+const minimal = {version: window.DASHBOARD_VERSION || "2.3.1", master:{connection:{dataDriver:"homey",driverSettings:{}},
   environment:{canvas:{width:1280,height:800},theme:"default_dark",layout:{mode:"scale",scale:{keepAspectRatio:true}}}},
   globalBindings:{}, widgets:{}, groups:{}, selectionGroups:{}};
 if (!Dashboard._isHomeyPlatform()) { await Dashboard.loadDashboardData(minimal); }
@@ -41,7 +41,8 @@ await new Promise(r => setTimeout(r, 5000));
 const ld = Dashboard.liveData || {};
 const used = new Set();
 for (const w of Object.values(data.widgets)) {
-  Object.values(w.bindings || {}).forEach(t => used.add(t));
+  const walk = b => { if (typeof b === 'string') { if (b) used.add(b); } else if (b && typeof b === 'object') Object.values(b).forEach(walk); };
+  walk(w.bindings);   // bindings can be nested (graph series[i].data since v2.3.0)
   for (const m of String(w.overrides.text || '').matchAll(/\{\{(homey\/[^{}]+?|[a-z0-9-]+\/[^{}\s]+?)\}\}/g)) used.add(m[1]);
 }
 const missingLive = [...used].filter(t => !t.startsWith('local/') && !(t in ld));
