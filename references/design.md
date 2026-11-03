@@ -33,13 +33,14 @@ When a page mixes two jobs, lead with the main one.
 1. **Show it, label it.** Every visual carries a readable number with unit. A gauge shows its value; a graph shows a Y axis or a current-value label; the `battery` widget shows no number, so add the value as text or use a text widget instead. Icons show state (glow when active), never decoration. Test: hide all static text – the page still makes sense.
 2. **The top says the state.** The first element on the status page is one sentence built from formulas: "All fine" or "2 things need attention: window bathroom open · pool pH 7.8". Build it from several short `if()` expressions next to each other (length limit, see `widgets.md`).
 3. **Plain labels.** Write labels the way you would say them: "Pool water", "Grid import now" – not "Power pulse" or "Aqua status". One label per value. No subtitle under a heading, no caption under a number.
-4. **Every changing number has a comparison.** "12.4 kWh · +2.1 vs yesterday", "21.3 °C · target 21.0", never a bare delta. Comparisons need data (insight histories, computed values) – plan them with `data-feeds.md`. If no comparison is available, show the target or limit instead.
-5. **The biggest thing is the most important thing.** One hero value per page with `mdAutoFitText: true`; at most 4 big numbers per page; at most 5 text sizes on the whole dashboard. The eye must know where to go first, second, third.
+4. **Every changing number has a comparison – and it compares like with like.** "12.4 kWh · +2.1 vs yesterday until 18:17", "21.3 °C · target 21.0", never a bare delta. A running period (today so far, this week so far) is compared with the same span of the reference period up to the same time, never with the whole previous day or week: "today until 17:00" against "all of yesterday" almost always looks like a saving (in the first test −2.4 kWh, while the fair comparison was +1.0 kWh). If only the whole reference period is available, the label says so ("vs. all of yesterday"). Averages of complete days are fine when the label names them ("Ø 7 days"). Comparisons need data (insight histories, computed values) – plan them with `data-feeds.md`. If no comparison is available, show the target or limit instead.
+5. **The biggest thing is the most important thing.** At most 4 big numbers per page; at most 5 text sizes on the whole dashboard. A single hero value may use `mdAutoFitText: true`. Several key figures of equal rank (a report page) all get the same fixed size instead (`textMdH1Fs`, see "Text size" in `widgets.md`), because auto-fit scales each box by its text length and makes equal figures look unequal. The eye must know where to go first, second, third.
 6. **Color means something.** `@success`, `@warning`, `@danger` only for good, watch and bad. `@accent` only for the one thing to look at and the highlighted chart series. Everything else uses `@text`, `@textMuted` or grey. A graph with several series (since v2.3.0) colors each series from the theme marker tints unless set; set `positiveColor` explicitly so that only the important series uses `@accent`. Arrows default to `@success` green – on a flow page set an explicit `mainColor` per measure and keep green for "good". Give each measure one color and use it everywhere (solar is the same color on the flow page and in the chart legend). One theme for the whole dashboard; no per-widget restyling.
 7. **Hard limits per page:** at most 4 sections, at most 5 items per card or list, at most 1 table, at most 4 big numbers, no grid with more than 6 columns. More than that? Keep what the reader acts on and move or cut the rest.
 8. **Say each thing once per page.** The same value does not appear as a gauge, a text value and a graph on one page. Helper bindings (arrow thickness, animation, `visible`) do not count. Totals must add up: values from different devices are sampled at slightly different times, so compute the remainder from the others instead of showing three raw values that never sum.
 9. **Cut, don't hide.** Moving detail to another page is fine only for reference detail. An exception that needs action stays on the status page.
-10. **Nothing spills.** Every number fits on one line at every scale. Size boxes for the longest expected value ("-12.5 °C", "10 000 W"), not the current one.
+10. **Nothing spills.** Every number fits on one line at every scale. Size boxes for the longest expected value ("-12.5 °C", "10 000 W"), not the current one, and for the height of their content: a Markdown table needs about (rows + 1) × 2.3 × font size plus ~24 px padding (header + 3 rows at 16 px ≥ 170 px; 150 px cut off the last row in the first test). A graph legend in the fixed or scale layout is drawn outside the graph widget and covers its neighbours unless it is `floating` inside the chart or has free space (see `widgets.md`).
+11. **Mark estimates.** A value computed with an assumption (a price taken from another day, a gap filled by interpolation) gets a visible `*` at the number and one line in the footnote saying what was assumed. Remove the mark as soon as the real data exists.
 
 ## 4. Home-dashboard specifics
 
@@ -58,7 +59,8 @@ These go beyond the source above, because a wall dashboard is read hundreds of t
 - Visuals without numbers: gauges without value, graphs without axis or value, battery bars, icons standing in for data.
 - More than 4 numbers fighting for attention at the top.
 - Clever labels instead of plain ones; a subtitle or caption under every heading or number.
-- A change without comparison ("+12 %").
+- A change without comparison ("+12 %"), or a running period compared with a complete one ("today so far" vs. "all of yesterday").
+- An estimated value that looks exactly like a measured one.
 - The same value shown two or three times on one page; totals that do not add up.
 - Green used both for "power flows" and for "good".
 - Every page in the same tile skeleton, whatever its job.
@@ -98,11 +100,18 @@ def design_check(dash, start_page=1, max_start_words=60):
             per_page[p].append((wid, w))
     for p, ws in sorted(per_page.items()):
         shown, hero, tables, sections, words = collections.defaultdict(set), 0, 0, 0, 0
+        sizes = set()
         for wid, w in ws:
             o, t, txt = w['overrides'], w['type'], str(w['overrides'].get('text', ''))
-            hero += bool(o.get('mdAutoFitText'))
+            hero += bool(o.get('mdAutoFitText')) or (o.get('textMdH1Fs') or 0) >= 40   # auto-fit or fixed big size
+            for k, v in o.items():                                          # text sizes (rule 5)
+                if re.search(r'(Fs|FontSize)$', k) and isinstance(v, (int, float)): sizes.add(v)
             sections += t == 'empty' and bool(o.get('label'))
             if t == 'text':
+                rows = len(re.findall(r'^\s*\|.*\|\s*$', txt, re.M)) - 1      # static table rows (minus separator)
+                fs = o.get('textMdTdFs') or 12
+                if rows > 1 and o['height'] < rows * 2.3 * fs + 24:
+                    warn.append(f'page {p} {wid}: {rows} table rows need ~{round(rows * 2.3 * fs + 24)} px, box is {o["height"]} px')
                 tables += len(re.findall(r'^\s*\|?\s*:?-{3,}', txt, re.M))
                 words += static_words(txt)
                 for m in TOPIC.finditer(txt): shown[m.group(1)].add(wid)
@@ -114,7 +123,10 @@ def design_check(dash, start_page=1, max_start_words=60):
                 warn.append(f'page {p} {wid}: battery widget shows no number')
             if t == 'graph' and o.get('type') != 'text' and not o.get('showAxisY'):
                 warn.append(f'page {p} {wid}: graph without Y axis – no readable numbers')
-        if hero > 4: warn.append(f'page {p}: {hero} auto-fit hero values (max 4)')
+            if t == 'graph' and o.get('showLegend', True) and o.get('legendPosition', 'right') != 'floating':
+                warn.append(f'page {p} {wid}: legend "{o.get("legendPosition", "right")}" is drawn OUTSIDE the widget – reserve space or use floating')
+        if hero > 4: warn.append(f'page {p}: {hero} big numbers (max 4)')
+        if len(sizes) > 5: warn.append(f'page {p}: {len(sizes)} text sizes {sorted(sizes)} (max 5 on the whole dashboard)')
         if tables > 1: warn.append(f'page {p}: {tables} tables (max 1)')
         if sections > 4: warn.append(f'page {p}: {sections} labelled sections (max 4)')
         for topic, ids in shown.items():
@@ -124,6 +136,6 @@ def design_check(dash, start_page=1, max_start_words=60):
     return warn
 ```
 
-`max_start_words` is a starting value; adjust it once the user has seen the first version.
+`max_start_words` is a starting value; adjust it once the user has seen the first version. The table check only sees tables written into the widget text; a table delivered by a data feed (e.g. `{{homey/event/x_table}}`) must be sized by hand from the feed's row count. Like-for-like comparisons (rule 4) and estimate marks (rule 11) live in the data feed, not in the JSON: check them in the feed code.
 
-**Runtime check (probe call):** the probe call in `browser-calls.md` also reports the smallest rendered font size per text widget and numbers that wrap onto two lines. Both checks are not yet run-tested; if they return implausible values (for example the same size for every widget), drop them and check in the screenshot instead.
+**Runtime check (probe call):** the probe call in `browser-calls.md` reports `problems` (missing element, failed formula, legend outside the widget) and `hints` (overflow, smallest font, wrapped numbers). Run-tested on v2.3.1: a widget without a found element means the checks did not run – that is a failure, never a pass. The overflow hint is unreliable for small text boxes (11 false hints in the first test), and neither check saw the two real defects. So the screenshot before handover is mandatory, and the static check above, not the runtime check, is the first line of defence.
