@@ -18,6 +18,7 @@ Tool names below are given without their MCP prefix (e.g. `apps_get` = `<prefix>
 
 | file | read when |
 |---|---|
+| `references/design.md` | before planning the pages and widgets of a new dashboard or reworking one (page plan, hierarchy, labels, colors, limits, design check) |
 | `references/browser-calls.md` | before the first browser call (opening the editor, discovery, probe, commit, demo fallback) |
 | `references/widgets.md` | before generating or editing the dashboard JSON (schema, widget fields, graphs, text formulas, bindings, colors) |
 | `references/data-feeds.md` | a value is not a device capability, or flow cards / calendars are involved |
@@ -56,11 +57,12 @@ Target for a new dashboard: **4 browser calls** – 1 open editor, 1 discovery c
 
 ## Workflow
 
+0. **Agree on the target picture** for a new dashboard or a rework (sections 1–2 of `references/design.md`): who looks at it, on which device, and what they should do afterwards; then a page plan with one job per page. Get the page plan approved before generating JSON. Skip this for small fixes to a single widget.
 1. **Collect devices and values** via the bridge (`devices_list`, `devices_get`, `devices_get_capability`, `insights_list`, `insights_get_entries`): available capabilities, units, sign conventions (e.g. grid meters often report export as negative `measure_power`), sub-capabilities such as `measure_power.pv1input`, value ranges.
 2. **Enable capabilities in Dashboard Studio.** Without this the app sends no data for them. They are stored in the app setting `enabled_capabilities` = `{ "<deviceId>": ["cap", "cap.sub"] }`. Read the current value with `apps_get_settings`, MERGE (never drop existing entries), show the user what will be added, and write with `apps_set_setting` only after the user confirms. The app picks up changes immediately.
    For values that are not device capabilities (system data, insight histories, computed values) use a data feed instead – see "Feeding non-device data" in `references/data-feeds.md`.
 3. **Read the exact topic names from the editor – MANDATORY** in ONE discovery call (see "Discovery call" in `references/browser-calls.md`), or ask the user to paste the Data Stream Explorer list. Do NOT generate the JSON before this list is available. Never derive, guess or construct device topic names (not from device IDs, not from device names). Every device topic used must appear verbatim in that list. Save the list to a file in the workspace for the topic check.
-4. **Generate the JSON** (schema in `references/widgets.md`) with a script, and run the topic check ("Topic names").
+4. **Generate the JSON** (schema in `references/widgets.md`, layout rules in `references/design.md`) with a script, and run the topic check ("Topic names") and the static design check ("Automatic checks" in `references/design.md`).
 5. **Test in the user's editor** with ONE probe call per iteration, fix the build script, repeat. Then one zoomed screenshot.
 6. **Hand over for approval.** Show the screenshot and ask whether and under which name to save. Never click *Save to Homey* without explicit confirmation in this session. Also deliver the JSON file.
 7. **Save** only after confirmation with ONE commit call, which also verifies.
@@ -78,6 +80,7 @@ A wrong topic shows an empty field without any error.
 
 ## Pitfalls
 
+- A "comprehensive" dashboard crammed onto one page is unreadable: split it into one page per job and respect the per-page limits in `references/design.md`.
 - Every browser call on the LAN editor costs the user an approval click – plan calls, bundle work, see "Browser budget".
 - Topic names not taken verbatim from the Data Stream Explorer leave fields empty without any error.
 - The editor starts with `dashboard.json`, else the demo in `simulation`; reading topics there yields only `sim/...`.
