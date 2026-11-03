@@ -20,6 +20,30 @@ Feeding non-device data (system values, insight histories) and the app's flow ca
 - **Persist only after confirmation:** `homeyscript_create` + a trigger flow. Current values every minute, histories every 5 minutes (check `new Date().getMinutes() % 5` in the script).
 - **Use Advanced Flows.** A basic flow created via `flows_create` runs, but the Homey web app showed it as an EMPTY canvas without card menu (observed on a Homey Pro 2026 where all other flows were Advanced Flows). Create the trigger with `advanced_flows_create` (cron `homey:manager:cron:every_nth` `{n: 1, type: "minute"}` → `homey:app:com.athom.homeyscript:run` with the autocomplete script object), and verify with `homeyscript_last_runs` after ~70 s.
 
+## Energy and fair comparisons from power insights (run-tested 2026-11-03)
+
+Many devices report power (kW or W) but no energy counter. A feed can integrate the power insight itself:
+
+```js
+const H = 3600000;
+const hr = await Homey.insights.getLogEntries({ id, resolution: 'last7Days' });   // hourly averages, 7 days
+const sx = await Homey.insights.getLogEntries({ id, resolution: 'last31Days' });  // 6-hour averages, 31 days
+const hStart = hr.values.length ? +new Date(hr.values[0].t) : Date.now();
+const buckets = [];                         // {t: start, len: ms, kwh: energy over the whole bucket}
+for (const p of sx.values) if (p.v != null && +new Date(p.t) < hStart) {
+  const t = +new Date(p.t), len = Math.min(t + sx.step, hStart) - t; buckets.push({ t, len, kwh: p.v * len / H }); }
+for (const p of hr.values) if (p.v != null) buckets.push({ t: +new Date(p.t), len: hr.step, kwh: p.v * hr.step / H });
+// energy in [a, b): cut buckets count pro rata (assumes even use inside a bucket)
+const sumRange = (a, b) => buckets.reduce((s, x) => { const ov = Math.min(x.t + x.len, b) - Math.max(x.t, a); return ov > 0 ? s + x.kwh * ov / x.len : s; }, 0);
+```
+
+- `v` is the bucket's average power; for a W insight divide by 1000. The running bucket is the average over the elapsed part, so `sumRange(midnight, now)` returns the energy so far.
+- **Compare like with like** (design rule 4): "yesterday" for a comparison with "today so far" is `sumRange(yesterdayMidnight, yesterdayMidnight + (now - todayMidnight))`; "previous week, same point" is `sumRange(prevWeekStart, now - 7 days)`. An independent check on hourly values matched to 0.01 kWh.
+- Older than 7 days only 6-hour buckets exist, so day boundaries are pro-rated estimates there.
+- Compute local midnights with `Intl.DateTimeFormat(…, {timeZone})`, not with fixed UTC offsets (DST).
+- Format numbers in the feed for the reader's locale (`toLocaleString('de-DE', …)`); formulas in text widgets only produce `.` decimals.
+- A ratio such as COP is energy-weighted (`Σ heat / Σ electricity`), not the mean of the live ratio, which is 0 whenever the device is idle.
+
 ## Flow cards (verified v2.3.1, read from `Homey.flow.getFlowCard*` on a Homey Pro; unchanged since v2.2.0)
 
 | card id (`homey:app:com.satoer.dashboardstudio:…`) | kind | purpose / arguments |

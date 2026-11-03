@@ -10,7 +10,7 @@ description: "Builds, changes and repairs importable JSON dashboards for the Hom
 
 Applies ONLY to the Homey app **Dashboard Studio** by Satoer (app ID `com.satoer.dashboardstudio`). Do not use it for the MCP AI Bridge's own dashboard (`dashboard_generate`) or for native Homey dashboards (`homey_dashboards_*`).
 
-Knowledge verified against Dashboard Studio **v2.3.1** (test channel, released 2026-11-03) on a Homey Pro (2026), checked 2026-11-03 from the app's own source and release notes via HomeyScript (the rewritten graph widget is not yet run-tested in the editor). If the installed version is newer, read the app's own release notes first (`release-changelog.json`, see "Source research without the browser" in `references/source-research.md`) and re-check anything they touch.
+Knowledge verified against Dashboard Studio **v2.3.1** (test channel, released 2026-11-03) on a Homey Pro (2026), checked 2026-11-03 from the app's own source and release notes via HomeyScript (first run-tested in the editor on 2026-11-03 with a report dashboard: two-series bar graph, floating legend, fixed-size text figures, data feed via `homey/event/…`). If the installed version is newer, read the app's own release notes first (`release-changelog.json`, see "Source research without the browser" in `references/source-research.md`) and re-check anything they touch.
 
 Tool names below are given without their MCP prefix (e.g. `apps_get` = `<prefix>homey-bridge__apps_get`, `javascript_tool` = `<prefix>Claude_Browser__javascript_tool`).
 
@@ -26,7 +26,8 @@ Tool names below are given without their MCP prefix (e.g. `apps_get` = `<prefix>
 
 ## Changes in v2.3.0 / v2.3.1 (take precedence over the reference files if they still say otherwise)
 
-- **Graph widget rewritten** (details in "Graph widget" in `references/widgets.md`): several series per widget in `overrides.series`, data bound as nested `bindings.series[i].data`; new type `stepped`, horizontal bars, legend (on by default), time-window buffer, value multiplier, animations, axis font opacity. Old top-level keys (`lineColor`, `fill`, `fillOpacity`, `lineWidth`, `linearTimeScale`, `bindings.data`, …) are dropped; old dashboards are migrated on load (migration rule 2.3.0), new JSON must use `series`. Scale keys are now `dynamicFloor`/`dynamicCeiling`/`fixedFloor`/`fixedCeiling` (old `autoMin`/`min`… still read as fallback). The dynamic floor now fits the data instead of starting at 0.
+- **Graph widget rewritten** (details in "Graph widget" in `references/widgets.md`): several series per widget in `overrides.series`, data bound as nested `bindings.series[i].data`; new type `stepped`, horizontal bars, legend (on by default), time-window buffer, value multiplier, animations, axis font opacity. Old top-level keys (`lineColor`, `fill`, `fillOpacity`, `lineWidth`, `linearTimeScale`, `bindings.data`, …) are dropped; old dashboards are migrated on load (migration rule 2.3.0), new JSON must use `series`. Scale keys are now `dynamicFloor`/`dynamicCeiling`/`fixedFloor`/`fixedCeiling` (old `autoMin`/`min`… are still read as fallback, but writing them makes the file count as legacy: loading it runs the migration and opens a blocking "Dashboard Upgraded" notice). The dynamic floor now fits the data instead of starting at 0.
+- **Run-test findings (2026-11-03, v2.3.1):** the graph legend is drawn *outside* the widget for `top`/`bottom`/`left`/`right` and covers its neighbours; place it with `legendPosition: "floating"` + `legendOffX`/`legendOffY` (canvas coordinates) or reserve space. A "Dashboard Upgraded" notice (old `dashboard.json` at editor start, or a draft with a legacy key) blocks `loadDashboardData` and keeps the data driver offline until OK is clicked. Widget DOM is in `widget.elements.container`. Details in `references/widgets.md` and `references/browser-calls.md`.
 - **Nested bindings:** collect topics recursively for the topic check and the probe call (done in `references/browser-calls.md` and `references/design.md`).
 - `LATEST_MIGRATION_VERSION` is **2.3.0**; take the JSON `version` from `version.js`.
 - **Swipe gestures (beta):** environment keys `gestureTouchOnly`, `swipe{Left,Right,Up,Down}{Enabled,Action,Page,Topic,Payload}`, `swipeIgnorePages`, `swipeWrapAround`; actions `next_page`, `prev_page`, `specific_page`, `topic` (from `master-layout.js` / `dashboard.js`, not run-tested). Let the user set them in the editor unless their location in the saved JSON has been checked.
@@ -51,11 +52,11 @@ On the user's LAN address the built-in browser asks the user for approval **for 
 1. **Do everything that does not need the browser via the bridge first**: devices, capabilities, insights, flows, HomeyScript tests, data-feed tests (`homeyscript_run`), app settings. None of this asks the user.
 2. **Do all research and the layout preparation in the cloud workspace** (Python build script, topic check against the saved topic list, gzip+base64 encoding) before the next browser call.
 3. **One browser call = one complete job.** Never split "load", "wait", "check" and "read back" into separate calls. Never use `read_page`, `get_page_text`, `find` or `form_input` in the editor – do the same in the JavaScript call. Use `browser_batch` only when a screenshot must follow a JS step directly (each item still asks).
-4. **Check rendering in JavaScript, not by eye** (overflowing text, `-` formula errors, missing live values, resolved widget config – see "Probe call" in `references/browser-calls.md`). A screenshot is only needed once at the end for the user's visual review, preferably `computer` → `zoom` on the canvas region at `scale` ≤ 0.6.
+4. **Check rendering in JavaScript, not by eye** (overflowing text, `-` formula errors, missing live values, resolved widget config – see "Probe call" in `references/browser-calls.md`). The JavaScript checks miss layout defects (a legend outside its widget, a table one row too short), so ONE full `screenshot` at `scale` 0.6–0.7 before handing over is mandatory. Prefer it to `zoom`: the coordinate frame changes when the pane is resized, and a zoom region planned from an older screenshot can miss the canvas.
 5. **Do source-code research without the browser** via HomeyScript (see "Source research without the browser" in `references/source-research.md`). Only if that is impossible, fold it into the discovery or probe call.
 6. **Save in the same call that does the final check** once the user has confirmed name and saving (see "Commit call" in `references/browser-calls.md`).
 
-Target for a new dashboard: **4 browser calls** – 1 open editor, 1 discovery call (switch to Homey platform + read topics + optional source research), 1 probe call per layout iteration, 1 screenshot, 1 commit call. Tell the user up front roughly how many approvals to expect.
+Target for a new dashboard: **4 browser calls** – 1 open editor, 1 discovery call (switch to Homey platform + read topics + optional source research), 1 probe call per layout iteration, 1 screenshot, 1 commit call. Tell the user up front roughly how many approvals to expect. Each `request_access` plus the following call counts as one approval. Realistic in the first v2.3.1 run: 14 approvals for a new dashboard (half-loaded page, upgrade notice, one probe timeout, two layout iterations) and 5 for a later layout change – the discovery and probe snippets in `references/browser-calls.md` now handle those cases.
 
 ## Step 0 – Preconditions (always run first, bridge only)
 
@@ -73,7 +74,7 @@ Target for a new dashboard: **4 browser calls** – 1 open editor, 1 discovery c
    For values that are not device capabilities (system data, insight histories, computed values) use a data feed instead – see "Feeding non-device data" in `references/data-feeds.md`.
 3. **Read the exact topic names from the editor – MANDATORY** in ONE discovery call (see "Discovery call" in `references/browser-calls.md`), or ask the user to paste the Data Stream Explorer list. Do NOT generate the JSON before this list is available. Never derive, guess or construct device topic names (not from device IDs, not from device names). Every device topic used must appear verbatim in that list. Save the list to a file in the workspace for the topic check.
 4. **Generate the JSON** (schema in `references/widgets.md`, layout rules in `references/design.md`) with a script, and run the topic check ("Topic names") and the static design check ("Automatic checks" in `references/design.md`).
-5. **Test in the user's editor** with ONE probe call per iteration, fix the build script, repeat. Then one zoomed screenshot.
+5. **Test in the user's editor** with ONE probe call per iteration, fix the build script, repeat. Then the mandatory screenshot; fix what it shows and add a static check for it, so it cannot come back.
 6. **Hand over for approval.** Show the screenshot and ask whether and under which name to save. Never click *Save to Homey* without explicit confirmation in this session. Also deliver the JSON file.
 7. **Save** only after confirmation with ONE commit call, which also verifies.
 
@@ -93,11 +94,14 @@ A wrong topic shows an empty field without any error.
 - A "comprehensive" dashboard crammed onto one page is unreadable: split it into one page per job and respect the per-page limits in `references/design.md`.
 - Every browser call on the LAN editor costs the user an approval click – plan calls, bundle work, see "Browser budget".
 - Topic names not taken verbatim from the Data Stream Explorer leave fields empty without any error.
-- The editor starts with `dashboard.json`, else the demo in `simulation`; reading topics there yields only `sim/...`.
+- The editor starts with `dashboard.json`, else the demo in `simulation`; reading topics there yields only `sim/...`. If that `dashboard.json` is older than `LATEST_MIGRATION_VERSION`, a "Dashboard Upgraded" notice waits for OK and the editor stays offline with an empty topic list; the discovery call closes it (OK does not save).
+- Never `await Dashboard.loadDashboardData()` without a timeout: a migration notice blocks the promise and the JS tool call fails after 45 s.
 - Capabilities that are not enabled send no data, so always check `enabled_capabilities`.
 - Over-long `{{…}}` expressions render `-` without an error.
 - Graph `maxPoints` defaults to 20 and silently truncates histories; since v2.3.0 `showLegend` defaults to true and shows a legend even for a single series.
-- Graph JSON in the pre-2.3.0 shape (`lineColor`, `bindings.data`) still loads through the migrator, but do not generate it: write `series`.
+- Graph JSON in the pre-2.3.0 shape (`lineColor`, `bindings.data`, and also `autoMin`/`min`/`autoMax`/`max`/`linearTimeScale` as widget overrides) still loads through the migrator, but do not generate it: write `series` and `dynamicFloor`/`fixedFloor`/`dynamicCeiling`/`fixedCeiling`. Assert it in the build script.
+- A graph legend (on by default since v2.3.0) is drawn outside the widget box in the fixed and scale layouts; use `floating` inside the chart or reserve space.
+- Comparing a running period with a complete one ("today so far" vs. "all of yesterday") misleads; compare up to the same time (`references/design.md`, rule 4).
 - Overlaid graph widgets (since v2.3.0 only needed for a second Y scale) with different reserved axis space do not line up.
 - Basic flows created via the bridge appear empty in the Homey web app on Advanced-Flow setups; use Advanced Flows.
 - Claude in Chrome cannot screenshot a tab that is in the background, and may disconnect after a timeout.
