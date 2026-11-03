@@ -14,7 +14,7 @@ Switches the editor to the Homey platform, waits, and returns the topic list plu
 
 ```js
 if (typeof Dashboard === 'undefined') { 'NOT_LOADED' } else {
-const minimal = {version: window.DASHBOARD_VERSION || "2.2.0", master:{connection:{dataDriver:"homey",driverSettings:{}},
+const minimal = {version: window.DASHBOARD_VERSION || "2.3.1", master:{connection:{dataDriver:"homey",driverSettings:{}},
   environment:{canvas:{width:1280,height:800},theme:"default_dark",layout:{mode:"scale",scale:{keepAspectRatio:true}}}},
   globalBindings:{}, widgets:{}, groups:{}, selectionGroups:{}};
 if (!Dashboard._isHomeyPlatform()) { await Dashboard.loadDashboardData(minimal); }
@@ -41,24 +41,35 @@ await new Promise(r => setTimeout(r, 5000));
 const ld = Dashboard.liveData || {};
 const used = new Set();
 for (const w of Object.values(data.widgets)) {
-  Object.values(w.bindings || {}).forEach(t => used.add(t));
+  const walk = b => { if (typeof b === 'string') { if (b) used.add(b); } else if (b && typeof b === 'object') Object.values(b).forEach(walk); };
+  walk(w.bindings);   // bindings can be nested (graph series[i].data since v2.3.0)
   for (const m of String(w.overrides.text || '').matchAll(/\{\{(homey\/[^{}]+?|[a-z0-9-]+\/[^{}\s]+?)\}\}/g)) used.add(m[1]);
 }
 const missingLive = [...used].filter(t => !t.startsWith('local/') && !(t in ld));
 // rendering problems: overflowing text widgets and '-' (failed formula)
-const problems = [];
+// design checks (design.md, not yet run-tested): smallest font per text widget, numbers wrapped onto 2 lines
+const MIN_FONT = 16;   // canvas px; 16 for wall panels, 13 for phone/desktop pages
+const problems = [], design = [];
 for (const [id, w] of Object.entries(Dashboard.widgets)) {
   const el = w.el || w.element || w.container || document.querySelector(`[data-widget-id="${id}"]`);
   if (!el) continue;
   if (el.scrollHeight > el.clientHeight + 2 || el.scrollWidth > el.clientWidth + 2) problems.push(id + ': overflow');
   if (/(^|\s)-(\s|$)/.test(el.innerText || '') && data.widgets[id]?.type === 'text') problems.push(id + ': "-" (formula?)');
+  if (data.widgets[id]?.type !== 'text') continue;
+  let minFont = Infinity;
+  for (const n of el.querySelectorAll('*')) {
+    if (n.childElementCount || !n.textContent.trim()) continue;
+    minFont = Math.min(minFont, parseFloat(getComputedStyle(n).fontSize));
+    if (/\d/.test(n.textContent) && n.getClientRects().length > 1) design.push(id + ': number wraps');
+  }
+  if (minFont < MIN_FONT) design.push(id + ': font ' + Math.round(minFont) + 'px');
 }
 const cfg = id => { const w = Dashboard.widgets[id]; const c = w && (w.config || w.c); return c ? {min: c.min, max: c.max, type: c.type} : null; };
 JSON.stringify({isHomey: Dashboard._isHomeyPlatform(), widgets: Object.keys(Dashboard.widgets).length,
-  missingLive, problems /*, resolved: cfg('<widgetId>') */});
+  missingLive, problems, design /*, resolved: cfg('<widgetId>') */});
 ```
 
-If the element lookup returns nothing for a widget type, inspect `Object.keys(Dashboard.widgets['<id>'])` once inside the same call and adapt. Only when `missingLive` and `problems` are empty, take the single zoomed screenshot.
+If the element lookup returns nothing for a widget type, inspect `Object.keys(Dashboard.widgets['<id>'])` once inside the same call and adapt. Only when `missingLive` and `problems` are empty, take the single zoomed screenshot. `design` entries are warnings: fix them or mention them to the user with the screenshot. Note that `getComputedStyle` reports the font size before any canvas scaling; if `mdAutoFitText` or the layout mode scales by transform, the value can differ from what is seen.
 
 ## Commit call (one browser call, only after explicit confirmation)
 
