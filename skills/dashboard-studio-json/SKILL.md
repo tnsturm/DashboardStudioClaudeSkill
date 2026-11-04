@@ -1,6 +1,6 @@
 ---
 name: "dashboard-studio-json"
-description: "Builds, changes and repairs importable JSON dashboards for the Homey app Dashboard Studio (com.satoer.dashboardstudio) via the MCP AI Bridge. Use when the user wants a Dashboard Studio dashboard, widget, data feed or layout fix. Only for this app – not for the bridge's own dashboard or native Homey dashboards."
+description: "Builds, changes and repairs JSON dashboards for the Homey app Dashboard Studio via the MCP AI Bridge: dashboards, widgets, data feeds, layout fixes. Not for native Homey or MCP-bridge dashboards."
 ---
 
 # Dashboard Studio – generating JSON dashboards

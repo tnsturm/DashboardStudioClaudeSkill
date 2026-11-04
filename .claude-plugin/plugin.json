@@ -1,0 +1,19 @@
+{
+  "name": "dashboard-studio-json",
+  "displayName": "Dashboard Studio (Homey)",
+  "version": "2.3.2",
+  "description": "Skill for building, changing and repairing JSON dashboards for the Homey app Dashboard Studio (com.satoer.dashboardstudio) via the MCP AI Bridge.",
+  "author": {
+    "name": "Torsten Sturm",
+    "url": "https://github.com/tnsturm"
+  },
+  "homepage": "https://github.com/tnsturm/DashboardStudioClaudeSkill",
+  "repository": "https://github.com/tnsturm/DashboardStudioClaudeSkill",
+  "keywords": [
+    "homey",
+    "dashboard-studio",
+    "smart-home",
+    "dashboard",
+    "skill"
+  ]
+}
