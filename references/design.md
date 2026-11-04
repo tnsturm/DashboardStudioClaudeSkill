@@ -125,6 +125,8 @@ def design_check(dash, start_page=1, max_start_words=60):
                 warn.append(f'page {p} {wid}: graph without Y axis – no readable numbers')
             if t == 'graph' and o.get('showLegend', True) and o.get('legendPosition', 'right') != 'floating':
                 warn.append(f'page {p} {wid}: legend "{o.get("legendPosition", "right")}" is drawn OUTSIDE the widget – reserve space or use floating')
+            if t == 'text' and any(k in o for k in ('fontSize', 'textColor', 'lineHeight')):
+                warn.append(f'page {p} {wid}: fontSize/textColor/lineHeight are ignored by the text widget – use textMdParaFs/…Col/…LineHeight')
         if hero > 4: warn.append(f'page {p}: {hero} big numbers (max 4)')
         if len(sizes) > 5: warn.append(f'page {p}: {len(sizes)} text sizes {sorted(sizes)} (max 5 on the whole dashboard)')
         if tables > 1: warn.append(f'page {p}: {tables} tables (max 1)')
