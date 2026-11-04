@@ -20,6 +20,25 @@ Feeding non-device data (system values, insight histories) and the app's flow ca
 - **Persist only after confirmation:** `homeyscript_create` + a trigger flow. Current values every minute, histories every 5 minutes (check `new Date().getMinutes() % 5` in the script).
 - **Use Advanced Flows.** A basic flow created via `flows_create` runs, but the Homey web app showed it as an EMPTY canvas without card menu (observed on a Homey Pro 2026 where all other flows were Advanced Flows). Create the trigger with `advanced_flows_create` (cron `homey:manager:cron:every_nth` `{n: 1, type: "minute"}` → `homey:app:com.athom.homeyscript:run` with the autocomplete script object), and verify with `homeyscript_last_runs` after ~70 s.
 
+## System health, logs and timeline (run-tested 2026-11-04, bridge 5.2.8)
+
+Sources for a "Homey system state" dashboard, all readable from ONE HomeyScript feed (no browser):
+
+| source | HomeyScript call | notes |
+|---|---|---|
+| Simple (Sys) Log app (`nl.nielsdeklerk.log`) | `(await (await Homey.apps.getApp({id: 'nl.nielsdeklerk.log'})).get({path: '/'})).logs` | Array, newest first: `{id, timestamp (UTC ISO), severity, app, message}`. `severity` follows syslog (0 emergency … 3 error, 4 warning, 6 info); entries of the app itself ("Removed log data older than …") have none. Other paths (`/logs`, `/getlogs`) return 404. App settings: `removeLogOlderThanDays`, `groupInTimeline`. |
+| Timeline | `Object.values(await Homey.notifications.getNotifications())` | `{excerpt, ownerUri, dateCreated}`; holds only the newest **250** entries. With Simple Log's `groupInTimeline: true` the log app can fill most of it (80 % in the test), so the timeline then covers only ~3 days. |
+| System | `Homey.system.getInfo()`, `getMemoryInfo()`, `getStorageInfo()` | `rebootReason` (e.g. `unexpected`), `bootDate`, `uptime`, `videoCoreTemperature`, `videoCoreUndervoltageOccured` / `…ThrottleOccured` (since boot) and `…Currently`; memory and storage `types` per app (incl. swap). |
+| System insights | see the feed example above | `loadavg`, `memory`, `temperature`, `undervoltageratio` as 7-day hourly histories (`resolution: 'last7Days'`, 168 points). |
+| Apps | `Object.values(await Homey.apps.getApps())` | `state`, `enabled`, `crashed`, `crashedCount`, `crashedMessage`. |
+| Devices | `Object.values(await Homey.devices.getDevices())` | `available`, `unavailableMessage`, `capabilitiesObj[cap].value / .lastUpdated` – enough for offline, low battery, active `alarm_*` and "silent for > 24 h". Inverters with a home battery report its state of charge as `measure_battery`; exclude them from low-battery warnings. |
+| Radio | `Homey.zigbee.getState()`, `Homey.zwave.getState()` | ready flags, node lists. |
+
+- **Not reachable:** the internal Homey system log (the developer log of Homey itself) – neither HomeyScript nor the bridge exposes it. Say so on the dashboard instead of leaving a gap.
+- **Severity is only as good as the flows that write it.** In the test a flow logged routine fan on/off messages with severity 0 and a status message as "Pool Error"; give the feed an ignore list (sources and message patterns) and classify technical failures by message (`timeout`, `unreach`, `refused`, `5xx`, `crash`) rather than by severity alone.
+- **Patterns beat raw lines:** group the problem entries of the last 7 days by source plus the first ~24 characters of the message with digits replaced, count them, and report the rhythm ("mostly 03:00", "only on 30.10."). Simple Log timestamps are UTC; convert to local time before computing hours and days.
+- **Size:** 45 events incl. four 168-point histories (~7 KB each) stayed below the 16 KB limit of *State Caching: Optimized* per event. A cron Advanced Flow every 5 minutes (`{n: 5, type: "minute"}`) ran the feed reliably.
+
 ## Energy and fair comparisons from power insights (run-tested 2026-11-03)
 
 Many devices report power (kW or W) but no energy counter. A feed can integrate the power insight itself:

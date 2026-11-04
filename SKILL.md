@@ -5,12 +5,12 @@ description: "Builds, changes and repairs importable JSON dashboards for the Hom
 
 # Dashboard Studio – generating JSON dashboards
 
-**Skill version 2.3.1** – matches the Dashboard Studio version it was verified against (`com.satoer.dashboardstudio` 2.3.1).
-**Requires MCP AI Bridge** (`community.mcp-ai-bridge`) – tested with **5.2.7**. If the installed Dashboard Studio or bridge version differs, mention it to the user; for a different bridge version check the bridge-dependent steps (tool names, `homeyscript_run` with `dry_run`, `apps_get_settings`).
+**Skill version 2.3.2** – matches the Dashboard Studio version it was verified against (`com.satoer.dashboardstudio` 2.3.2).
+**Requires MCP AI Bridge** (`community.mcp-ai-bridge`) – tested with **5.2.8**. If the installed Dashboard Studio or bridge version differs, mention it to the user; for a different bridge version check the bridge-dependent steps (tool names, `homeyscript_run` with `dry_run`, `apps_get_settings`).
 
 Applies ONLY to the Homey app **Dashboard Studio** by Satoer (app ID `com.satoer.dashboardstudio`). Do not use it for the MCP AI Bridge's own dashboard (`dashboard_generate`) or for native Homey dashboards (`homey_dashboards_*`).
 
-Knowledge verified against Dashboard Studio **v2.3.1** (test channel, released 2026-11-03) on a Homey Pro (2026), checked 2026-11-03 from the app's own source and release notes via HomeyScript (first run-tested in the editor on 2026-11-03 with a report dashboard: two-series bar graph, floating legend, fixed-size text figures, data feed via `homey/event/…`). If the installed version is newer, read the app's own release notes first (`release-changelog.json`, see "Source research without the browser" in `references/source-research.md`) and re-check anything they touch.
+Knowledge verified against Dashboard Studio **v2.3.2** (test channel, released 2026-11-03) on a Homey Pro (2026), checked from the app's own source and release notes via HomeyScript. Run-tested in the editor on v2.3.1 (2026-11-03: report dashboard with two-series bar graph, floating legend, fixed-size text figures, data feed via `homey/event/…`) and on v2.3.2 (2026-11-04: four-page system-health dashboard with a two-series 7-day line graph, horizontal bars with text labels, grouped bars, two `stepped` graphs, a page navigation and one HomeyScript feed with 45 events). If the installed version is newer, read the app's own release notes first (`release-changelog.json`, see "Source research without the browser" in `references/source-research.md`) and re-check anything they touch.
 
 Tool names below are given without their MCP prefix (e.g. `apps_get` = `<prefix>homey-bridge__apps_get`, `javascript_tool` = `<prefix>Claude_Browser__javascript_tool`).
 
@@ -24,7 +24,15 @@ Tool names below are given without their MCP prefix (e.g. `apps_get` = `<prefix>
 | `references/data-feeds.md` | a value is not a device capability, or flow cards / calendars are involved |
 | `references/source-research.md` | after an app update, for unknown widget fields, the Auto-Widget Gallery, or variables/flows/moods |
 
-## Changes in v2.3.0 / v2.3.1 (take precedence over the reference files if they still say otherwise)
+## Changes in v2.3.2 and run-test findings of 2026-11-04 (take precedence over the reference files if they still say otherwise)
+
+- **2.3.2 (release notes):** fixed page switches, visibility rules and audio triggers on bare Homey event topic names (aliases); faster dashboard load and group repaint; settings-reset and inspector fixes. No change to the JSON schema, the graph widget, the flow cards or `LATEST_MIGRATION_VERSION` (still 2.3.0). Keep writing full `homey/event/<name>` topics.
+- **Text size and color only via the Markdown keys.** The text widget deletes `fontSize`, `textColor` and `lineHeight` from its config (`widgets/text.js`, verified 2.3.2): JSON with these keys renders in the default 12 px. Use `textMdParaFs` / `textMdParaCol` / `textMdParaLineHeight` (paragraphs, lists, bold lines), `textMdH1Fs`… for headings and `textMdThFs` / `textMdTdFs` for tables (details in "Text size" in `references/widgets.md`).
+- **Graph run-test on v2.3.2** (details in `references/widgets.md`): two `line` series with `bufferMode: "duration"` + `durationPreset: "7d"` (168 hourly points each), horizontal bars from `[{l, v}]` with `timeFormat: "TextLabels"`, grouped vertical bars with two series, `stepped` with `dynamicFloor/dynamicCeiling: false` + `fixedFloor: 0` / `fixedCeiling: 5` all render. A `top` or `bottom` legend again landed outside the widget; leaving ~35 px free below the graph fixed it.
+- **Simple (Sys) Log and timeline as a data source** (details in `references/data-feeds.md`): the app `nl.nielsdeklerk.log` answers `Homey.apps.getApp({id}).get({path: '/'})` in HomeyScript with all entries incl. severity; the timeline is `Homey.notifications.getNotifications()` (max. 250 entries). The internal Homey system log is not reachable via HomeyScript or the bridge.
+- **Fewer approvals for the visual check:** lay all pages side by side on one oversized canvas and take ONE screenshot ("Contact sheet" in `references/browser-calls.md`).
+
+## Changes in v2.3.0 / v2.3.1 (still valid)
 
 - **Graph widget rewritten** (details in "Graph widget" in `references/widgets.md`): several series per widget in `overrides.series`, data bound as nested `bindings.series[i].data`; new type `stepped`, horizontal bars, legend (on by default), time-window buffer, value multiplier, animations, axis font opacity. Old top-level keys (`lineColor`, `fill`, `fillOpacity`, `lineWidth`, `linearTimeScale`, `bindings.data`, …) are dropped; old dashboards are migrated on load (migration rule 2.3.0), new JSON must use `series`. Scale keys are now `dynamicFloor`/`dynamicCeiling`/`fixedFloor`/`fixedCeiling` (old `autoMin`/`min`… are still read as fallback, but writing them makes the file count as legacy: loading it runs the migration and opens a blocking "Dashboard Upgraded" notice). The dynamic floor now fits the data instead of starting at 0.
 - **Run-test findings (2026-11-03, v2.3.1):** the graph legend is drawn *outside* the widget for `top`/`bottom`/`left`/`right` and covers its neighbours; place it with `legendPosition: "floating"` + `legendOffX`/`legendOffY` (canvas coordinates) or reserve space. A "Dashboard Upgraded" notice (old `dashboard.json` at editor start, or a draft with a legacy key) blocks `loadDashboardData` and keeps the data driver offline until OK is clicked. Widget DOM is in `widget.elements.container`. Details in `references/widgets.md` and `references/browser-calls.md`.
@@ -101,6 +109,7 @@ A wrong topic shows an empty field without any error.
 - Graph `maxPoints` defaults to 20 and silently truncates histories; since v2.3.0 `showLegend` defaults to true and shows a legend even for a single series.
 - Graph JSON in the pre-2.3.0 shape (`lineColor`, `bindings.data`, and also `autoMin`/`min`/`autoMax`/`max`/`linearTimeScale` as widget overrides) still loads through the migrator, but do not generate it: write `series` and `dynamicFloor`/`fixedFloor`/`dynamicCeiling`/`fixedCeiling`. Assert it in the build script.
 - A graph legend (on by default since v2.3.0) is drawn outside the widget box in the fixed and scale layouts; use `floating` inside the chart or reserve space.
+- The text widget ignores `fontSize`, `textColor` and `lineHeight`; use `textMdParaFs`, `textMdParaCol`, `textMdParaLineHeight` (and `textMdTdFs`/`textMdThFs` for tables). The static check in `references/design.md` warns about it.
 - Comparing a running period with a complete one ("today so far" vs. "all of yesterday") misleads; compare up to the same time (`references/design.md`, rule 4).
 - Overlaid graph widgets (since v2.3.0 only needed for a second Y scale) with different reserved axis space do not line up.
 - Basic flows created via the bridge appear empty in the Homey web app on Advanced-Flow setups; use Advanced Flows.

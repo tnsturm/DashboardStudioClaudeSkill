@@ -94,6 +94,33 @@ return JSON.stringify({load, connected: Dashboard._dataDriverConnected, unsaved:
 
 Fix every entry in `missingLive` and `problems` before the screenshot. `unsaved: true` right after loading means the migrator changed the draft – a legacy key is still in it. `hints` are not proof of a defect: in the first v2.3.1 test 11 of 11 "overflow" hints were false (labels, hero values and a table that all rendered cleanly), while the two real defects (a table one row too short, a legend outside the chart) were only visible in the screenshot. The screenshot is therefore **mandatory** before handing over. Take it as a full `screenshot` at `scale` 0.6–0.7; a `zoom` region refers to the latest coordinate frame, which changes when the pane is resized, so a zoom planned from an older screenshot can miss the canvas. Note that `getComputedStyle` reports the font size before any canvas scaling.
 
+## Contact sheet: all pages in one screenshot (verified v2.3.2)
+
+A multi-page dashboard would need one page switch plus one screenshot per page, i.e. two approvals per page. Instead build a second, throw-away draft in the build script that puts every page side by side on one oversized canvas, load it with the probe code and take ONE screenshot:
+
+```python
+import copy
+def contact_sheet(dash, cols=2, w=1280, h=870, gap=20):
+    sheet = copy.deepcopy(dash); sheet['widgets'] = {}
+    for wid, wd in dash['widgets'].items():
+        for p in pages_of(wd['overrides']['page']):          # pages_of() from design.md
+            nw = copy.deepcopy(wd); o = nw['overrides']
+            dx, dy = ((p - 1) % cols) * (w + gap), ((p - 1) // cols) * (h + gap)
+            o['x'] += dx; o['y'] += dy; o['page'] = 1
+            for kx, ky in (('fromX', 'fromY'), ('toX', 'toY'), ('legendOffX', 'legendOffY')):  # absolute canvas coords
+                if kx in o: o[kx] += dx
+                if ky in o: o[ky] += dy
+            for pt in o.get('customPoints') or []:
+                pt['x'] += dx; pt['y'] += dy
+            sheet['widgets'][f'{wid}__p{p}'] = nw
+    env = sheet['master']['environment']['canvas']
+    rows = (max(p for wd in dash['widgets'].values() for p in pages_of(wd['overrides']['page'])) + cols - 1) // cols
+    env['width'], env['height'] = cols * (w + gap), rows * (h + gap)
+    return sheet
+```
+
+With `layout.mode: "scale"` the editor fits the whole sheet into the pane. In the test, four 1280×870 pages in a 2×2 sheet were readable in one screenshot at 800 px width: font sizes, legends outside their widget, wrapped button labels and a cut-off table were all visible. Live values arrive as usual, because the topics are unchanged. Never save the sheet; load the real draft again in the commit call.
+
 ## Commit call (one browser call, only after explicit confirmation)
 
 Saves the currently loaded dashboard under `NAME`, handles the overwrite and success dialogs, and verifies. Optionally load the final B64 first in the same call so nothing has to be repeated.
