@@ -1,0 +1,12 @@
+{
+  "name": "tnsturm-homey",
+  "owner": { "name": "Torsten Sturm", "url": "https://github.com/tnsturm" },
+  "metadata": { "description": "Claude skills for Homey by tnsturm" },
+  "plugins": [
+    {
+      "name": "dashboard-studio-json",
+      "source": "./",
+      "description": "Build, change and repair Dashboard Studio dashboards for Homey via the MCP AI Bridge."
+    }
+  ]
+}
