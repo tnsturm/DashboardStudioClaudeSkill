@@ -30,7 +30,7 @@ When a page mixes two jobs, lead with the main one.
 
 ## 3. Rules
 
-1. **Show it, label it.** Every visual carries a readable number with unit. A gauge shows its value; a graph shows a Y axis or a current-value label; the `battery` widget shows no number, so add the value as text or use a text widget instead. Icons show state (glow when active), never decoration. Test: hide all static text – the page still makes sense.
+1. **Show it, label it.** Every visual carries a readable number with unit. On graphs the axis title (`axisYLabel`, since v2.3.5) can carry the unit. A gauge shows its value; a graph shows a Y axis or a current-value label; the `battery` widget shows no number, so add the value as text or use a text widget instead. Icons show state (glow when active), never decoration. Test: hide all static text – the page still makes sense.
 2. **The top says the state.** The first element on the status page is one sentence built from formulas: "All fine" or "2 things need attention: window bathroom open · pool pH 7.8". Build it from several short `if()` expressions next to each other (length limit, see `widgets.md`).
 3. **Plain labels.** Write labels the way you would say them: "Pool water", "Grid import now" – not "Power pulse" or "Aqua status". One label per value. No subtitle under a heading, no caption under a number.
 4. **Every changing number has a comparison – and it compares like with like.** "12.4 kWh · +2.1 vs yesterday until 18:17", "21.3 °C · target 21.0", never a bare delta. A running period (today so far, this week so far) is compared with the same span of the reference period up to the same time, never with the whole previous day or week: "today until 17:00" against "all of yesterday" almost always looks like a saving (in the first test −2.4 kWh, while the fair comparison was +1.0 kWh). If only the whole reference period is available, the label says so ("vs. all of yesterday"). Averages of complete days are fine when the label names them ("Ø 7 days"). Comparisons need data (insight histories, computed values) – plan them with `data-feeds.md`. If no comparison is available, show the target or limit instead.
@@ -41,6 +41,7 @@ When a page mixes two jobs, lead with the main one.
 9. **Cut, don't hide.** Moving detail to another page is fine only for reference detail. An exception that needs action stays on the status page.
 10. **Nothing spills.** Every number fits on one line at every scale. Size boxes for the longest expected value ("-12.5 °C", "10 000 W"), not the current one, and for the height of their content: a Markdown table needs about (rows + 1) × 2.3 × font size plus ~24 px padding (header + 3 rows at 16 px ≥ 170 px; 150 px cut off the last row in the first test). A graph legend in the fixed or scale layout is drawn outside the graph widget and covers its neighbours unless it is `floating` inside the chart or has free space (see `widgets.md`).
 11. **Mark estimates.** A value computed with an assumption (a price taken from another day, a gap filled by interpolation) gets a visible `*` at the number and one line in the footnote saying what was assumed. Remove the mark as soon as the real data exists.
+12. **Numbers the reader knows.** Graph axes abbreviate large values by default (`abbreviateLargeValues`: 12.5k). For readers who do not think in "k", switch it off or convert with the series `valueMultiplier` (W → kW) and name the unit in the axis title.
 
 ## 4. Home-dashboard specifics
 
@@ -66,6 +67,7 @@ These go beyond the source above, because a wall dashboard is read hundreds of t
 - Every page in the same tile skeleton, whatever its job.
 - Numbers broken onto two lines, text spilling out of its card, grids with 7+ columns.
 - Everything on one long page instead of one page per job.
+- Stacked bars whose segments do not add up to the shown total, or stacked series in different units.
 
 ## 6. Automatic checks
 
@@ -127,6 +129,10 @@ def design_check(dash, start_page=1, max_start_words=60):
                 warn.append(f'page {p} {wid}: legend "{o.get("legendPosition", "right")}" is drawn OUTSIDE the widget – reserve space or use floating')
             if t == 'text' and any(k in o for k in ('fontSize', 'textColor', 'lineHeight')):
                 warn.append(f'page {p} {wid}: fontSize/textColor/lineHeight are ignored by the text widget – use textMdParaFs/…Col/…LineHeight')
+            old = [k for k in ('lineColor', 'fill', 'fillOpacity', 'linearTimeScale', 'autoMin', 'autoMax', 'min', 'max',
+                               'categoryLabelRotation', 'valueLabelRotation', 'timezoneConvert', 'pointValuesInterval') if k in o]
+            if t == 'graph' and old:
+                warn.append(f'page {p} {wid}: outdated graph keys {old} – see "Graph widget" in widgets.md')
         if hero > 4: warn.append(f'page {p}: {hero} big numbers (max 4)')
         if len(sizes) > 5: warn.append(f'page {p}: {len(sizes)} text sizes {sorted(sizes)} (max 5 on the whole dashboard)')
         if tables > 1: warn.append(f'page {p}: {tables} tables (max 1)')

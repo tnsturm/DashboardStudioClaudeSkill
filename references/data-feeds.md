@@ -63,7 +63,7 @@ const sumRange = (a, b) => buckets.reduce((s, x) => { const ov = Math.min(x.t + 
 - Format numbers in the feed for the reader's locale (`toLocaleString('de-DE', …)`); formulas in text widgets only produce `.` decimals.
 - A ratio such as COP is energy-weighted (`Σ heat / Σ electricity`), not the mean of the live ratio, which is 0 whenever the device is idle.
 
-## Flow cards (verified v2.3.1, read from `Homey.flow.getFlowCard*` on a Homey Pro; unchanged since v2.2.0)
+## Flow cards (verified v2.3.5, read from `Homey.flow.getFlowCard*` on a Homey Pro; unchanged since v2.2.0)
 
 | card id (`homey:app:com.satoer.dashboardstudio:…`) | kind | purpose / arguments |
 |---|---|---|
