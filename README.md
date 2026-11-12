@@ -7,8 +7,8 @@ generates the dashboard JSON with a build script, tests it in your Dashboard Stu
 after you confirm. It also covers data feeds (HomeyScript → `homey/event/…`), the rewritten graph widget,
 design rules for readable dashboards and how to keep the number of browser approvals low.
 
-**Skill version 2.3.2** – the skill version matches the Dashboard Studio version it was verified against.
-Tested with MCP AI Bridge 5.2.8. See `skills/dashboard-studio-json/SKILL.md` for what changed.
+**Skill version 2.3.5** – the skill version matches the Dashboard Studio version it was verified against.
+Tested with MCP AI Bridge 6.1.0 (test channel) and 5.3.0. See `skills/dashboard-studio-json/SKILL.md` for what changed.
 
 ## Requirements
 
@@ -50,7 +50,7 @@ skills/dashboard-studio-json/     the skill: SKILL.md + references/
 ## Releasing a new version
 
 1. Update the skill and set the same version in `SKILL.md` ("Skill version x.y.z") and `.claude-plugin/plugin.json`.
-2. Merge to `main`, then push a tag: `git tag v2.3.2 && git push origin v2.3.2`.
+2. Merge to `main`, then push a tag: `git tag v2.3.5 && git push origin v2.3.5`.
 3. The workflow checks that tag and both version numbers agree, builds `dashboard-studio-json.zip` and attaches it to the release.
 
 ## Credits

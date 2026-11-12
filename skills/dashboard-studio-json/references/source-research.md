@@ -2,9 +2,13 @@
 
 Reading the app's own source and help via HomeyScript, the Auto-Widget Gallery, variables/flows/moods with a Personal API Key, and further reference sources.
 
-## Source research without the browser (verified v2.3.1)
+## Source research without the browser (verified v2.3.5)
 
 The editor web server is reachable from HomeyScript on the Homey itself at `http://127.0.0.1:5050/`. This costs the user **no approval click**. Use `homeyscript_run` with inline `code` and `dry_run: true` (GET fetches are allowed in a dry run). Useful files:
+
+If `homeyscript_run` is refused (bridge strict guardrails, or the key lacks the tool), fall back to the browser: fold the same `fetch` calls into the discovery call.
+
+The shipped `release-changelog.json` can already contain notes for the NEXT version (v2.3.5 listed 2.4.0). Before documenting a feature, confirm it in the code (`version.js` and the widget or engine file).
 
 | file | content |
 |---|---|
