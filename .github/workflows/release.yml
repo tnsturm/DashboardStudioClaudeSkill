@@ -1,0 +1,50 @@
+name: Release skill ZIP
+
+# Builds dashboard-studio-json.zip (one folder "dashboard-studio-json/" with SKILL.md and references/)
+# and attaches it to a GitHub release. Runs when a tag like v2.3.2 is pushed, or by hand.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build the release for, e.g. v2.3.2"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Check that tag, plugin.json and SKILL.md agree on the version
+        run: |
+          v="${TAG#v}"
+          pj=$(jq -r .version .claude-plugin/plugin.json)
+          sk=$(grep -oP '^\*\*Skill version \K[0-9.]+' skills/dashboard-studio-json/SKILL.md)
+          echo "tag=$v plugin.json=$pj SKILL.md=$sk"
+          test "$v" = "$pj" && test "$v" = "$sk"
+
+      - name: Build ZIP
+        run: |
+          cd skills
+          zip -r ../dashboard-studio-json.zip dashboard-studio-json -x '*.DS_Store'
+          cd ..
+          unzip -l dashboard-studio-json.zip
+
+      - name: Create or update the release
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dashboard-studio-json.zip --clobber
+          else
+            gh release create "$TAG" dashboard-studio-json.zip --title "dashboard-studio-json $TAG" --generate-notes
+          fi
