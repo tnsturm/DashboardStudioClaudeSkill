@@ -6,7 +6,7 @@ File schema, widget types and fields, graph widget, live values and formulas in 
 
 ```json
 {
-  "version": "<installed version from version.js, e.g. 2.3.1>",
+  "version": "<installed version from version.js, e.g. 2.5.2>",
   "master": {
     "connection": {"dataDriver": "homey", "driverSettings": {}},
     "environment": {
@@ -22,11 +22,14 @@ File schema, widget types and fields, graph widget, live values and formulas in 
   "globalBindings": {},
   "widgets": { "<id>": {"type": "…", "overrides": {…}, "bindings": {…}} },
   "groups": {},
-  "selectionGroups": {}
+  "selectionGroups": {},
+  "pages": {"1": {"name": "Overview"}, "2": {"name": "Energy"}}
 }
 ```
 
 - Since v2.0.14 the editor saves a nested "V2" format (`save-format-v2.js`): label-based nested keys on disk (e.g. `container.background.startColor`), flat keys at runtime. Empty `groups`/`selectionGroups` are omitted on save. The schema above still imports correctly.
+- `pages` (since v2.5.0, Page Manager): optional sparse page names keyed by page number; unnamed pages are omitted and shown as "Page N". Widgets and navigation still refer to page numbers.
+- Regional settings (since v2.4.0) live in `environment`: `locale`, `timeFormat`, `dateFormat`, `firstDayOfWeek`, `customLocale`. Stored values other than `locale` are not verified – set them in the editor.
 - A minimal `master` is enough. Missing parts (`typography`, `container`, `theme.colors`, `widgetDefaults`) are filled from defaults.
 - `dataDriver` is one of `homey`, `mqtt`, `nodered` or `simulation`. Use `homey` for the user's own Homey; it also switches the editor's platform on load.
 - `layout.mode`: `fixed` uses exact pixels ("Fixed Resolution"), `scale` scales to the window using the same coordinates ("Scale to Fit Screen"), `responsive` uses columns ("Responsive Columns").
@@ -49,7 +52,7 @@ File schema, widget types and fields, graph widget, live values and formulas in 
 | `slider` | dimmer or setpoint | `min`, `max`, `vertical` | `value` |
 | `list` | log or feed | – | `data` |
 | `image` | URL or SVG image | `url`, `fit`, `liveRefresh`, `refreshInterval` | `svgRaw`, `url` |
-| `clock` | analog, flip or text clock | `displayMode` | – |
+| `clock` | analog, flip or text clock | `displayMode`, `locale` (since v2.4.0, default `auto` = from dashboard; replaces `textLocale`/`flipLocale`, never write those) | `locale` |
 | `menu` | navigation menu; items with `actionType` `topic`, `page` or `url` (`urlTo`) | – | see the editor |
 | `lightgrid`, `editbox` | light tiles, text input | – | see the editor |
 
@@ -115,7 +118,8 @@ Minimal series graph:
 - Floor/ceil (no such functions): `round(x - 0.5)` / `round(x + 0.5)`.
 - Condition: `{{if({{topic}} < 0, "[color @success]Export[/color]", "[color @danger]Import[/color]")}}`
 - Value inside a condition: `{{if({{t}} >= 1000, "[color @danger]"+round({{t}}, 0)+" ppm[/color]", "[color @success]"+round({{t}}, 0)+" ppm[/color]")}}` (verified)
-- Allowed functions: `round min max abs if number and or not xor nor contains containsanycase`. Comparisons: `< <= > >= ==`. `+` also concatenates text.
+- Allowed functions: `round min max abs if number and or not xor nor contains containsanycase countdown` (`countdown()` since v2.4.0, see the v2.4.0 section in `SKILL.md`). Comparisons: `< <= > >= ==`. `+` also concatenates text.
+- Callouts: `[block1:…]`–`[block4:…]`, and since v2.4.0 `[block @danger:…]` / `[block #e11d48:…]`.
 - Markup: `[color @danger]…[/color]`, `[blink]…[/blink]`, icons `:ph-sun:` or `:ph-flame|32|@danger:` (name, size, color), tables, `#` headings.
 - **Length limit:** a single `{{…}}` expression of roughly 500+ characters fails silently and renders `-`. Long topic names repeated many times hit this fast. Split long logic into several short, independent expressions placed next to each other.
 - Verified pattern, compass direction from an angle (one short expression per sector, only one prints):
